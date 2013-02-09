@@ -1,0 +1,9 @@
+{
+    "name":"socket.io-nme-server",
+    "version":"0.0.1",
+    "private":false,
+    "dependencies":{
+        "socket.io": ">=0.9.4"
+    }
+}
+
