@@ -5,7 +5,7 @@ Socket.io NME client extension.
 
 ###What's done:
 <ul>
-<li>Interface of [socket.io client (v.9)](http://socket.io/#how-to-use)</li>
+<li>Interface of socket.io client (v.9) (http://socket.io/#how-to-use)</li>
 <li>Multiplexing of sockets</li>
 <li>Automatic reconnection of sockets</li>
 <li>Only xhr-polling transport</li>
