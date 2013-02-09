@@ -35,7 +35,7 @@ Socket.io NME client extension.
 </ul>
 
 ###Example:
-See [example](https://github.com/dimanux/socket.io-nme-client/Project/Source/com/gemioli/ExtensionTest.hx)
+See [example](https://github.com/dimanux/socket.io-nme-client/blob/master/Project/Source/com/gemioli/ExtensionTest.hx)
 
 
 Copyright (c) 2013, Dmitriy Kapustin (dimanux), gemioli.com
