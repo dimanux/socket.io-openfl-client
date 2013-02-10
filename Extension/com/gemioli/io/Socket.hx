@@ -47,9 +47,9 @@ class Socket extends EventDispatcher
 		
 		connectionStatus = SocketConnectionStatus.DISCONNECTED;
 		var uriParsed = new URLParser(uri);
-		host = (uriParsed.host == null ? "localhost" : uriParsed.host);
-		port = (uriParsed.port == null ? "80" : uriParsed.port);
 		secure = uriParsed.secure;
+		host = (uriParsed.host == null ? "localhost" : uriParsed.host);
+		port = (uriParsed.port == null ? (secure ? "443" : "80") : uriParsed.port);
 		endpoint = uriParsed.path;
 		_uri = uri;
 		_buffer = new Array<String>();
