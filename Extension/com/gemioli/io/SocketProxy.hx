@@ -26,6 +26,7 @@ import com.gemioli.io.events.SocketEvent;
 import com.gemioli.io.events.SocketProxyEvent;
 import com.gemioli.io.events.TransportEvent;
 import com.gemioli.io.Transport;
+import com.gemioli.io.transports.WebSocketTransport;
 import com.gemioli.io.transports.XHRPollingTransport;
 import com.gemioli.io.utils.Utils;
 import haxe.Utf8;
@@ -161,10 +162,10 @@ class SocketProxy extends EventDispatcher
 	{
 		if (connectionStatus == SocketConnectionStatus.DISCONNECTED)
 			return;
+		connectionStatus = SocketConnectionStatus.DISCONNECTING;
 		if (_transport != null)
 		{
 			_transport.close();
-			_transport = null;
 		}
 	}
 	
@@ -196,6 +197,8 @@ class SocketProxy extends EventDispatcher
 		
 		switch (_transportName)
 		{
+			case "websocket":
+				_transport = new WebSocketTransport(_host, _port, _secure, _sessionId);
 			case "xhr-polling":
 				_transport = new XHRPollingTransport(_host, _port, _secure, _sessionId);
 			default:
@@ -225,7 +228,10 @@ class SocketProxy extends EventDispatcher
 		_transport.removeEventListener(TransportEvent.CLOSED, onTransportClosed);
 		_transport.removeEventListener(TransportEvent.MESSAGE, onTransportMessage);
 		_transport = null;
-		disconnectEndpoints();
+		if (connectionStatus == SocketConnectionStatus.CONNECTING)
+			nextTransport();
+		else
+			disconnectEndpoints();
 	}
 	
 	private function onTransportMessage(event : TransportEvent) : Void

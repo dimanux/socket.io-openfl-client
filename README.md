@@ -17,6 +17,7 @@ Socket.io NME client extension.
 <li>flashsocket transport</li>
 <li>htmlfile transport</li>
 <li>jsonp-polling transport</li>
+<li>Optimizations</li>
 </ul>
 
 ###Tested with HaXe 2.10, NME 3.5.5, HXCPP 2.10.3 on platforms:

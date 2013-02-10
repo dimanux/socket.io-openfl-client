@@ -21,8 +21,10 @@
  */
 
 package com.gemioli.io.transports;
+
 import com.gemioli.io.events.TransportEvent;
 import com.gemioli.io.Transport;
+import nme.errors.SecurityError;
 import nme.events.Event;
 import nme.events.HTTPStatusEvent;
 import nme.events.IOErrorEvent;
@@ -66,7 +68,8 @@ class XHRPollingTransport extends Transport
 		
 		nextRecv();
 		
-		dispatchEvent(new TransportEvent(TransportEvent.OPENED));
+		if (_recvLoader != null)
+			dispatchEvent(new TransportEvent(TransportEvent.OPENED));
 	}
 	
 	override public function close() : Void
@@ -87,7 +90,14 @@ class XHRPollingTransport extends Transport
 		if (_recvLoader != null)
 		{
 			_recvRequest.url = _url + Transport.counter;
-			_recvLoader.load(_recvRequest);
+			try
+			{
+				_recvLoader.load(_recvRequest);
+			}
+			catch (error : SecurityError)
+			{
+				close();
+			}
 		}
 	}
 	
@@ -127,7 +137,14 @@ class XHRPollingTransport extends Transport
 		_sendRequest.data = encode(_messagesBuffer);
 		_messagesBuffer.splice(0, _messagesBuffer.length);
 		_sendLoader.addEventListener(Event.COMPLETE, onSendComplete);
-		_sendLoader.load(_sendRequest);
+		try
+		{
+			_sendLoader.load(_sendRequest);
+		}
+		catch (error : SecurityError)
+		{
+			close();
+		}
 	}
 	private function onSendComplete(event : Event) : Void
 	{
