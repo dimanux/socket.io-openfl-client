@@ -8,24 +8,25 @@ Socket.io NME client extension.
 <li>Interface of socket.io client (v.9) (http://socket.io/#how-to-use)</li>
 <li>Multiplexing of sockets</li>
 <li>Automatic reconnection of sockets</li>
-<li>Only xhr-polling transport</li>
+<li>WebSocket and xhr-polling transports</li>
+<li>Socket options: transports, reconnect, reconnectionAttempts, reconnectionDelay, connectTimeout</li>
 </ul>
 
 ###ToDo:
 <ul>
-<li>websocket transport</li>
-<li>flashsocket transport</li>
-<li>htmlfile transport</li>
-<li>jsonp-polling transport</li>
+<li>Secure connections</li>
+<li>Flash Policy</li>
 <li>Optimizations</li>
 </ul>
 
-###Tested with HaXe 2.10, NME 3.5.5, HXCPP 2.10.3 on platforms:
+###Tested with HaXe 2.10, NME 3.5.5, HXCPP 2.10.3, nodejs 0.8.18 (or dotcloud) on platforms:
 <ul>
 <li>Flash 11</li>
 <li>HTML5</li>
-<li>Windows</li>
-<li>Android</li>
+<li>Windows (can't determine server disconnection)</li>
+<li>Android (works only xhr-polling and main thread frozen)</li>
+<li>iOS (not tested)</li>
+<li>Blackberry (not tested)</li>
 </ul>
 
 ###Folders:

@@ -37,7 +37,7 @@ class WebSocketTransport extends Transport
 	{
 		super(host, port, secure, sessionId);
 		name = "websocket";
-		_url = (_secure ? "wss://" : "ws://") + _host + ":" + _port + "/socket.io/1/websocket/" + _sessionId + "/?t=";
+		_url = (_secure ? "wss://" : "ws://") + _host + (_port == "" ? (_secure ? "443" : ":80") : (":" + _port)) + "/socket.io/1/websocket/" + _sessionId + "/?t=" + Transport.counter;
 	}
 	
 	override public function send(message : String) : Void
@@ -55,6 +55,9 @@ class WebSocketTransport extends Transport
 		_socket.onmessage = onMessage;
 		_socket.onclose = onClose;
 		_socket.onerror = onError;
+		#if !js
+		_socket.connect();
+		#end
 	}
 	
 	override public function close() : Void
@@ -65,26 +68,31 @@ class WebSocketTransport extends Transport
 		_socket = null;
 	}
 	
-	private function onMessage(message : Dynamic) : Void
+	private function onMessage(event : Dynamic) : Void
 	{
 		if (_socket != null)
-			decode(message.data);
+			decode(event.data);
 	}
 	
-	private function onOpen() : Void
+	private function onOpen(event : Dynamic) : Void
 	{
 		if (_socket != null)
 			dispatchEvent(new TransportEvent(TransportEvent.OPENED));
 	}
 	
-	private function onClose() : Void
+	private function onClose(event : Dynamic) : Void
 	{
-		dispatchEvent(new TransportEvent(TransportEvent.CLOSED));
+		if (_socket != null)
+		{
+			trace("WebSocket transport closed: [" + event.code + "] " + event.reason);
+			dispatchEvent(new TransportEvent(TransportEvent.CLOSED));
+		}
 	}
 	
-	private function onError() : Void
+	private function onError(event : Dynamic) : Void
 	{
-		close();
+		if (_socket != null)
+			trace("WebSocket transport error: " + event.message);
 	}
 	
 	private var _url : String;

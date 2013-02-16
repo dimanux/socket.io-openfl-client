@@ -38,6 +38,7 @@ class Socket extends EventDispatcher
 	public var connectionStatus(default, null) : SocketConnectionStatus;
 	public var host(default, null) : String;
 	public var port(default, null) : String;
+	public var transport(getTransport, null) : String;
 	public var secure(default, null) : Bool;
 	public var endpoint(default, null) : String;
 	
@@ -48,14 +49,14 @@ class Socket extends EventDispatcher
 		connectionStatus = SocketConnectionStatus.DISCONNECTED;
 		var uriParsed = new URLParser(uri);
 		secure = uriParsed.secure;
-		host = (uriParsed.host == null ? "localhost" : uriParsed.host);
-		port = (uriParsed.port == null ? (secure ? "443" : "80") : uriParsed.port);
+		host = uriParsed.host;
+		port = uriParsed.port;
 		endpoint = uriParsed.path;
 		_uri = uri;
 		_buffer = new Array<String>();
 		_ack = 0;
 		_callbacks = new Hash < Dynamic->Void > ();
-						
+								
 		if (options != null)
 		{
 			if (Std.is(options.reconnect, Bool))
@@ -64,8 +65,21 @@ class Socket extends EventDispatcher
 				_maxReconnectionAttempts = options.reconnectionAttempts;
 			if (Std.is(options.reconnectionDelay, Int))
 				_reconnectionDelay = options.reconnectionDelay;
+			if (Std.is(options.connectTimeout, Int))
+				_connectTimeout = options.connectTimeout;
+			if (Std.is(options.transports, Array))
+				_transports = options.transports;
 		}
 		
+		if (_transports == null || _transports.length == 0)
+		{
+			_transports = new Array<String>();
+			_transports.push("websocket");
+			_transports.push("xhr-polling");
+		}
+		
+		_connectTimer = new Timer(_connectTimeout);
+		_connectTimer.addEventListener(TimerEvent.TIMER, onConnectTimeout);
 		_reconnectionAttemptsLeft = _maxReconnectionAttempts;
 		_reconnectTimer = new Timer(_reconnectionDelay);
 		_reconnectTimer.addEventListener(TimerEvent.TIMER, onReconnect);
@@ -78,33 +92,31 @@ class Socket extends EventDispatcher
 	
 	public function connect() : Void
 	{
+		if (connectionStatus != SocketConnectionStatus.DISCONNECTED)
+			return;
 		if (_reconnectTimer.running)
 		{
 			_reconnectTimer.reset();
 			_reconnectionAttemptsLeft = _maxReconnectionAttempts;
 		}
-		if (connectionStatus != SocketConnectionStatus.DISCONNECTED)
-			return;
 		connectionStatus = SocketConnectionStatus.CONNECTING;
 		if (isReconnecting())
 			dispatchEvent(new SocketEvent(SocketEvent.RECONNECTING));
 		else
 			dispatchEvent(new SocketEvent(SocketEvent.CONNECTING));
-		
+		_currentTransports = _transports.copy();
+		connectAttempt();
+	}
+	
+	private function connectAttempt() : Void
+	{
 		_proxy = SocketProxy.connectSocket(this);
 		if (_proxy == null)
-		{
-			connectionStatus = SocketConnectionStatus.DISCONNECTED;
-			if (isReconnecting())
-			{
-				_reconnectTimer = new Timer(_reconnectionDelay);
-				_reconnectTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onReconnect);
-			}
-			else
-				dispatchEvent(new SocketEvent(SocketEvent.CONNECT_FAILED));
-		}
+			tryNextTransport();
 		else
 		{
+			_connectTimer.reset();
+			_connectTimer.start();
 			_proxy.addEventListener(endpoint, onMessage);
 			if (_proxy.connectionStatus == SocketConnectionStatus.CONNECTED)
 				_proxy.sendMessage("1::" + endpoint);
@@ -173,6 +185,13 @@ class Socket extends EventDispatcher
 		sendMessages();
 	}
 	
+	private function getTransport() : String
+	{
+		if (_currentTransports == null || _currentTransports.length == 0)
+			return "unknown";
+		return _currentTransports[0];
+	}
+	
 	private function sendMessages() : Void
 	{
 		if (connectionStatus == SocketConnectionStatus.CONNECTED)
@@ -192,23 +211,13 @@ class Socket extends EventDispatcher
 				_proxy.removeEventListener(endpoint, onMessage);
 				SocketProxy.disconnectSocket(this);
 				_proxy = null;
-				
+								
 				switch (connectionStatus)
 				{
 					case SocketConnectionStatus.CONNECTING:
 					{
-						connectionStatus = SocketConnectionStatus.DISCONNECTED;
-						if (isReconnecting())
-						{
-							if (_reconnectionAttemptsLeft == 0)
-								dispatchEvent(new SocketEvent(SocketEvent.RECONNECT_FAILED));
-							else
-							{
-								_reconnectTimer.start();
-							}
-						}
-						else
-							dispatchEvent(new SocketEvent(SocketEvent.CONNECT_FAILED));
+						_connectTimer.stop();
+						tryNextTransport();
 					}
 					case SocketConnectionStatus.CONNECTED:
 					{
@@ -228,6 +237,7 @@ class Socket extends EventDispatcher
 			{
 				if (connectionStatus == SocketConnectionStatus.CONNECTING)
 				{
+					_connectTimer.stop();
 					connectionStatus = SocketConnectionStatus.CONNECTED;
 					if (isReconnecting())
 						dispatchEvent(new SocketEvent(SocketEvent.RECONNECT));
@@ -315,16 +325,49 @@ class Socket extends EventDispatcher
 		connect();
 	}
 	
+	private function onConnectTimeout(event : TimerEvent) : Void
+	{
+		_connectTimer.reset();
+		_proxy.removeEventListener(endpoint, onMessage);
+		SocketProxy.disconnectSocket(this);
+		_proxy = null;
+		tryNextTransport();
+	}
+	
+	private function tryNextTransport()
+	{
+		_currentTransports.shift();
+		if (_currentTransports.length > 0)
+		{
+			connectAttempt();
+			return;
+		}
+		connectionStatus = SocketConnectionStatus.DISCONNECTED;
+		if (isReconnecting())
+		{
+			if (_reconnectionAttemptsLeft == 0)
+				dispatchEvent(new SocketEvent(SocketEvent.RECONNECT_FAILED));
+			else
+				_reconnectTimer.start();
+		}
+		else
+			dispatchEvent(new SocketEvent(SocketEvent.CONNECT_FAILED));
+	}
+	
 	private var _uri : String;
 	private var _buffer : Array<String>;
 	private var _reconnectionAttemptsLeft : Int;
 	private var _proxy : SocketProxy;
 	private var _ack : Int;
 	private var _callbacks : Hash < Dynamic->Void > ;
+	private var _connectTimer : Timer;
 	private var _reconnectTimer : Timer;
+	private var _transports : Array<String>;
+	private var _currentTransports : Array<String>;
 	
 	// Options default values
+	private var _connectTimeout : Int = 10000; // ms
 	private var _reconnect : Bool = true;
 	private var _maxReconnectionAttempts : Int = 10;
-	private var _reconnectionDelay : Float = 500; // ms
+	private var _reconnectionDelay : Int = 500; // ms
 }

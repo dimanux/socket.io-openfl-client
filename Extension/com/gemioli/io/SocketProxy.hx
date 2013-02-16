@@ -44,7 +44,7 @@ class SocketProxy extends EventDispatcher
 	
 	public static function connectSocket(socket : Socket) : SocketProxy
 	{
-		var proxy = getProxy(socket.host, socket.port, socket.secure);
+		var proxy = getProxy(socket.host, socket.port, socket.secure, socket.transport);
 		for (endpoint in proxy._endpoints)
 			if (endpoint == socket.endpoint)
 				return null;
@@ -55,7 +55,7 @@ class SocketProxy extends EventDispatcher
 	
 	public static function disconnectSocket(socket : Socket) : Void
 	{
-		var proxy = getProxy(socket.host, socket.port, socket.secure);
+		var proxy = getProxy(socket.host, socket.port, socket.secure, socket.transport);
 		for (endpoint in proxy._endpoints)
 			if (endpoint == socket.endpoint)
 			{
@@ -77,17 +77,15 @@ class SocketProxy extends EventDispatcher
 		}
 	}
 	
-	private static function getProxy(host : String, port : String, secure : Bool) : SocketProxy
+	private static function getProxy(host : String, port : String, secure : Bool, transport : String) : SocketProxy
 	{
-		var name = (secure ? "https" : "http") + "://" + host;
-		if (port != null)
-			name += ":" + port;
+		var name = (secure ? "https" : "http") + "://" + host + (port == "" ? "" : (":" + port)) + "/" + transport;
 		if (!_proxies.exists(name))
-			_proxies.set(name, new SocketProxy(name, host, port, secure));
+			_proxies.set(name, new SocketProxy(name, host, port, secure, transport));
 		return _proxies.get(name);
 	}
 	
-	private function new(name : String, host : String, port : String, secure : Bool)
+	private function new(name : String, host : String, port : String, secure : Bool, transport : String)
 	{
 		super();
 		
@@ -95,6 +93,7 @@ class SocketProxy extends EventDispatcher
 		_host = host;
 		_port = port;
 		_secure = secure;
+		_transportName = transport;
 		_endpoints = new Array<String>();
 		connectionStatus = SocketConnectionStatus.DISCONNECTED;
 		_transport = null;
@@ -107,7 +106,7 @@ class SocketProxy extends EventDispatcher
 		connectionStatus = SocketConnectionStatus.CONNECTING;
 		
 		var handshakeRequest = new URLRequest();
-		handshakeRequest.url = (_secure ? "https://" : "http://") + _host + ":" + _port + "/socket.io/1/?t=" + Transport.counter;
+		handshakeRequest.url = (_secure ? "https://" : "http://") + _host + (_port == "" ? "" : (":" + _port)) + "/socket.io/1/?t=" + Transport.counter;
 		handshakeRequest.method = URLRequestMethod.GET;
 		_handshakeLoader = new URLLoader();
 		_handshakeLoader.addEventListener(Event.COMPLETE, onHandshake);
@@ -128,10 +127,14 @@ class SocketProxy extends EventDispatcher
 		_sessionId = responseArray[0];
 		_heartbeatTimeout = Std.parseInt(responseArray[1]);
 		_closeTimeout = Std.parseInt(responseArray[2]);
-		_transports = responseArray[3].split(",");
-		
-		_transportName = null;
-		nextTransport(); // Start trying transports
+		var transports = responseArray[3].split(",");
+		for (transport in transports)
+			if (transport == _transportName)
+			{
+				tryTransport();
+				return;
+			}
+		disconnectEndpoints();
 	}
 	
 	private function onHandshakeStatus(event : HTTPStatusEvent) : Void
@@ -169,32 +172,8 @@ class SocketProxy extends EventDispatcher
 		}
 	}
 	
-	private function nextTransport() : Void
+	private function tryTransport() : Void
 	{
-		if (_transports.length == 0)
-		{
-			disconnectEndpoints();
-			return;
-		}
-		if (_transportName == null)
-			_transportName = _transports[0];
-		else
-		{
-			var transportIndex = 0;
-			for (transport in _transports)
-				if (transport == _transportName)
-					break;
-				else
-					++transportIndex;
-			if ((++transportIndex % _transports.length) == 0)
-			{
-				disconnectEndpoints();
-				return;
-			}
-			else
-				_transportName = _transports[transportIndex];
-		}
-		
 		switch (_transportName)
 		{
 			case "websocket":
@@ -203,18 +182,15 @@ class SocketProxy extends EventDispatcher
 				_transport = new XHRPollingTransport(_host, _port, _secure, _sessionId);
 			default:
 				{
-					nextTransport();
+					disconnectEndpoints();
 					return;
 				}
 		}
 		
-		if (_transport != null)
-		{
-			_transport.addEventListener(TransportEvent.OPENED, onTransportOpened);
-			_transport.addEventListener(TransportEvent.CLOSED, onTransportClosed);
-			_transport.addEventListener(TransportEvent.MESSAGE, onTransportMessage);
-			_transport.open();
-		}
+		_transport.addEventListener(TransportEvent.OPENED, onTransportOpened);
+		_transport.addEventListener(TransportEvent.CLOSED, onTransportClosed);
+		_transport.addEventListener(TransportEvent.MESSAGE, onTransportMessage);
+		_transport.open();
 	}
 	
 	private function onTransportOpened(event : TransportEvent) : Void
@@ -228,10 +204,7 @@ class SocketProxy extends EventDispatcher
 		_transport.removeEventListener(TransportEvent.CLOSED, onTransportClosed);
 		_transport.removeEventListener(TransportEvent.MESSAGE, onTransportMessage);
 		_transport = null;
-		if (connectionStatus == SocketConnectionStatus.CONNECTING)
-			nextTransport();
-		else
-			disconnectEndpoints();
+		disconnectEndpoints();
 	}
 	
 	private function onTransportMessage(event : TransportEvent) : Void
@@ -281,7 +254,6 @@ class SocketProxy extends EventDispatcher
 	private var _sessionId : String;
 	private var _heartbeatTimeout : Int;
 	private var _closeTimeout : Int;
-	private var _transports : Array<String>;
 	
 	// Static proxies
 	private static var _proxies : Hash<SocketProxy> = new Hash<SocketProxy>();

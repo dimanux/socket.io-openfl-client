@@ -2,7 +2,7 @@ var app = require('http').createServer(handler)
   , io = require('socket.io').listen(app)
   , fs = require('fs')
 
-app.listen(80);
+app.listen(8080);
 
 function handler (req, res) {
   fs.readFile(__dirname + '/index.html',
@@ -20,6 +20,8 @@ io.sockets.on('connection', function (socket) {
   socket.send('Hello');
   socket.on('message', function(msg) {
 	console.log("Client say [" + msg + "]");
+	if (msg == "Ping")
+		socket.send("Pong");
   });
   socket.emit("ServerEvent", {name : 'Jerry'});
   socket.on('ClientEventEmpty', function () {

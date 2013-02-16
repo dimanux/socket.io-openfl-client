@@ -44,12 +44,15 @@ class ExtensionTest extends Sprite
 	{
 		removeEventListener(Event.ADDED_TO_STAGE, init);
 		addEventListener(Event.ENTER_FRAME, onUpdate);
-		graphics.beginFill(0xFFFFFF);
+		Lib.current.graphics.beginFill(0x000000);
+		Lib.current.graphics.drawRect(0, 0, Lib.current.stage.stageWidth, Lib.current.stage.stageHeight);
+		Lib.current.graphics.endFill();
+		graphics.beginFill(0xffffff);
 		graphics.drawRect( -20, -20, 40, 40);
 		graphics.endFill();
 		
-		_socket = new Socket("http://localhost");
-		//_socket = new Socket("http://diman-nodejs-1.eu01.aws.af.cm");
+		_socket = new Socket("http://localhost:8080");
+		//_socket = new Socket("http://socketioserver-dimanux.dotcloud.com");
 		_socket.addEventListener(SocketEvent.CONNECTING, function(event : SocketEvent) : Void {
 			trace("Connecting...");
 		});
@@ -72,6 +75,8 @@ class ExtensionTest extends Sprite
 			trace("Message: [" + event.args + "]");
 			if (event.args == "Hello")
 				_socket.send("Hi");
+			else if (event.args == "Pong")
+				_socket.send("Ping");
 		});
 		_socket.addEventListener(SocketEvent.RECONNECTING, function(event : SocketEvent) : Void {
 			trace("Reconnecting...");
@@ -88,12 +93,14 @@ class ExtensionTest extends Sprite
 			_socket.emit("ClientEventData", { myData : "Data" } );
 			_socket.emit("ClientEventCallback", null, function(data : Dynamic) : Void {
 				trace("Callback data[" + data[0] + "]");
+				trace("Starting ping-pong...");
+				_socket.send("Ping");
 			});
 		});
 		_socket.connect();
 		
-		_socketChat = new Socket("http://localhost/chat");
-		//_socketChat = new Socket("http://diman-nodejs-1.eu01.aws.af.cm/chat", { reconnectionAttempts : 50 } );
+		_socketChat = new Socket("http://localhost:8080/chat", {transports : ["xhr-polling"]});
+		//_socketChat = new Socket("http://socketioserver-dimanux.dotcloud.com/chat", {transports : ["xhr-polling"]} );
 		_socketChat.addEventListener(SocketEvent.CONNECTING, function(event : SocketEvent) : Void {
 			trace("Chat Connecting...");
 		});

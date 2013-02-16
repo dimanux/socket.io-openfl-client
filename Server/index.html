@@ -1,11 +1,13 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
-  var socket = io.connect('http://localhost/');
+  var socket = io.connect('/');
   
   socket.on('message', function (msg) {
 	console.log('Message [' + msg + ']');
 	if (msg == 'Hello')
 		socket.send('Hi');
+	else if (msg == 'Pong')
+		socket.send('Ping');
   });
   
   socket.on('ServerEvent', function(data) {
@@ -14,6 +16,8 @@
 	socket.emit('ClientEventData', { myData : 'Data'});
 	socket.emit('ClientEventCallback', function(data) {
 		console.log('Callback data[' + data + ']');
+		console.log('Starting ping-pong...');
+		socket.send('Ping');
 	});
   });
   
@@ -53,7 +57,7 @@
 	console.log('Reconnected failed');
   });
   
-  var socketChat = io.connect('http://localhost/chat');
+  var socketChat = io.connect('/chat');
   socketChat.on('connect', function() {
 	console.log('Chat Connected');
 	socketChat.send('Hi chat!');

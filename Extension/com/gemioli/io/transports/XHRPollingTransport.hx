@@ -38,7 +38,7 @@ class XHRPollingTransport extends Transport
 	{
 		super(host, port, secure, sessionId);
 		name = "xhr-polling";
-		_url = (_secure ? "https://" : "http://") + _host + ":" + _port + "/socket.io/1/xhr-polling/" + _sessionId + "/?t=";
+		_url = (_secure ? "https://" : "http://") + _host + (_port == "" ? "" : (":" + _port)) + "/socket.io/1/xhr-polling/" + _sessionId + "/?t=";
 		_messagesBuffer = new Array<String>();
 	}
 	

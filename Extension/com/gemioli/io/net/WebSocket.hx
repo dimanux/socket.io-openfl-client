@@ -27,55 +27,782 @@ package com.gemioli.io.net;
 @:native("WebSocket")
 extern class WebSocket
 {
+	public inline static var CONNECTING : Int = 0;
+	public inline static var OPEN : Int = 1;
+	public inline static var CLOSING : Int = 2;
+	public inline static var CLOSED : Int = 3;
+	
 	static function __init__() : Void
 	{
 		haxe.macro.Tools.includeFile("com/gemioli/io/net/WebSocket.js");
 	}
 	
-	public function new(url : String) : Void;
+	public var url(default, null) : String;
+	public var readyState(default, null) : Int;
+	public var extensions(default, null) : String;
+	public var protocol(default, null) : String;
 	
-	public function send(data : String) : Void;
-	public function close() : Void;
+	public function new(url : String, ?protocols : Dynamic) : Void;
 	
-	public var onopen : Void->Void;
-	public var onmessage : {data : String}->Void;
-	public var onclose : Void->Void;
-	public var onerror : Void->Void;
+	public function send(data : Dynamic) : Void;
+	public function close(?code : Int, ?reason : String) : Void;
+	
+	public var onopen : Dynamic->Void;
+	public var onmessage : Dynamic->Void;
+	public var onclose : Dynamic->Void;
+	public var onerror : Dynamic->Void;
 }
 #else
 
-import nme.Lib;
+import com.gemioli.io.net.events.CloseEvent;
+import com.gemioli.io.net.events.MessageEvent;
+import com.gemioli.io.utils.BaseCode64;
+import com.gemioli.io.utils.URLParser;
+import com.gemioli.io.net.events.ErrorEvent;
+import haxe.Int32;
+import haxe.io.Eof;
+import haxe.SHA1;
 import nme.events.Event;
 import nme.events.EventDispatcher;
+import nme.utils.ByteArray;
+import nme.events.ProgressEvent;
+import nme.events.IOErrorEvent;
+import nme.events.SecurityErrorEvent;
 
-class WebSocket extends EventDispatcher
+#if flash
+import flash.net.Socket;
+#else // cpp
+import sys.net.Host;
+import cpp.vm.Thread;
+import haxe.Timer;
+import haxe.io.Error;
+
+private class Socket extends EventDispatcher
 {
-	public function new(url : String)
+	public function new()
 	{
 		super();
-		Lib.current.addEventListener(Event.ENTER_FRAME, onEnterFrame);
+		_socket = new sys.net.Socket();
+		_timer = new Timer(0);
 	}
 	
-	private function onEnterFrame(event : Event) : Void
+	public function connect(host : String, port : Int) : Void
 	{
-		Lib.current.removeEventListener(Event.ENTER_FRAME, onEnterFrame);
-		close();
-	}
-	
-	public function send(data : String) : Void
-	{
-		
+		try
+		{
+			_socket.connect(new Host(host), port);
+			_socket.setBlocking(false);
+			_timer.run = socketLoop;
+			var mainThread = Thread.current();
+			_readThread = Thread.create(function() {
+				readLoop(mainThread);
+			});
+		}
+		catch (e : Dynamic)
+		{
+			dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Socket can't connect to host[" + host + ":" + port + "]"));
+			return;
+		}
+		dispatchEvent(new Event(Event.CONNECT));
 	}
 	
 	public function close() : Void
 	{
-		if (onclose != null)
-			onclose();
+		if (_readThread == null)
+		{
+			dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Close failed - socket is not opened."));
+			return;
+		}
+		_readThread = null;
+		_timer.run = function() {};
+		_socket.close();
+		dispatchEvent(new Event(Event.CLOSE));
 	}
 	
-	public var onopen : Void->Void;
-	public var onmessage : {data : String}->Void;
-	public var onclose : Void->Void;
-	public var onerror : Void->Void;
+	public function writeBytes(bytes : ByteArray, offset : Int = 0, length : Int = 0) : Void
+	{
+		try
+		{
+			if (_readThread == null)
+			{
+				dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't write bytes to socket - socket is closed."));
+				return;
+			}
+			_socket.output.writeBytes(bytes, offset, length == 0 ? bytes.length - offset : length);
+		}
+		catch (e : Dynamic)
+		{
+			dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't write bytes to socket."));
+		}
+	}
+	
+	public function writeUTFBytes(value : String) : Void
+	{
+		try
+		{
+			if (_readThread == null)
+			{
+				dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't write UTFBytes to socket - socket is closed."));
+				return;
+			}
+			_socket.output.writeString(value);				
+		}
+		catch (e : Dynamic)
+		{
+			dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't write UTFBytes to socket."));
+		}
+	}
+	
+	public function flush() : Void
+	{
+		try
+		{
+			if (_readThread == null)
+			{
+				dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't flush socket - socket is closed."));
+				return;
+			}
+			_socket.output.flush();
+		}
+		catch (e : Dynamic)
+		{
+			dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't flush socket."));
+		}
+	}
+	
+	public function readBytes(bytes : ByteArray, offset : Int = 0, length : Int = 0) : Void
+	{
+		try
+		{
+			if (_readThread == null)
+			{
+				dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't read bytes from socket - socket is closed."));
+				return;
+			}
+			if (length == 0)
+				bytes.writeBytes(_socket.input.readAll(), offset);
+			else
+				_socket.input.readBytes(bytes, offset, length);
+		}
+		catch (e : Dynamic)
+		{
+			dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't read bytes from socket."));
+		}
+	}
+	
+	private function socketLoop() : Void
+	{
+		try
+		{
+			if (Thread.readMessage(false))
+			{
+				dispatchEvent(new ProgressEvent(ProgressEvent.SOCKET_DATA));
+				if (_readThread != null)
+					_readThread.sendMessage(true);
+			}
+		}
+		catch (e : Dynamic)
+		{
+			close();
+		}
+	}
+	
+	private function readLoop(mainThread : Thread) : Void
+	{
+		while (true)
+		{
+			_socket.waitForRead();
+			mainThread.sendMessage(true);
+			Thread.readMessage(true);
+		}
+	}
+	
+	private var _socket : sys.net.Socket;
+	private var _timer : Timer;
+	private var _readThread : Thread;
 }
+#end
+
+// Thanks to gimite (https://github.com/gimite/web-socket-js)
+class WebSocket extends EventDispatcher
+{
+	public inline static var CONNECTING : Int = 0;
+	public inline static var OPEN : Int = 1;
+	public inline static var CLOSING : Int = 2;
+	public inline static var CLOSED : Int = 3;
+	
+	public var url(default, null) : String;
+	public var readyState(default, null) : Int;
+	public var extensions(default, null) : String;
+	public var protocol(default, null) : String;
+	
+	public function new(url : String, ?protocols : Dynamic)
+	{
+		super();
+		this.url = url;
+		_protocols = new Array<String>();
+		if (Std.is(protocols, String))
+			_protocols.push(protocols);
+		else if (Std.is(protocols, Array))
+			_protocols = _protocols.concat(protocols);
+		_uri = URLParser.parse(url);
+		_socket = new Socket();
+		_socket.addEventListener(ProgressEvent.SOCKET_DATA, onSocketData);
+		_socket.addEventListener(Event.CONNECT, onSocketConnect);
+		_socket.addEventListener(Event.CLOSE, onSocketClose);
+		_socket.addEventListener(IOErrorEvent.IO_ERROR, onSocketIOError);
+		_socket.addEventListener(SecurityErrorEvent.SECURITY_ERROR, onSocketSecurityError);
+		_buffer = new ByteArray();
+		_framesQueue = new Array<WebSocketFrame>();
+		_framesPayloadLength = Int32.ofInt(0);
+		readyState = CLOSED;
+		addEventListener(Event.OPEN, onOpen);
+		addEventListener(Event.CLOSE, onClose);
+		addEventListener(ErrorEvent.ERROR, onError);
+		addEventListener(MessageEvent.MESSAGE, onMessage);
+	}
+	
+	public function connect() : Void
+	{
+		if (readyState != CLOSED)
+		{
+			dispatchEvent(new ErrorEvent("Can't connect WebSocket - WebSocket not closed."));
+			return;
+		}
+		readyState = CONNECTING;
+		_socket.connect(_uri.host, Std.parseInt(_uri.port));
+	}
+	
+	public function send(data : Dynamic) : Void
+	{
+		if (Std.is(data, String))
+			sendFrame(WebSocketFrame.textFrame(cast(data, String)));
+		else if (Std.is(data, ByteArray))
+			sendFrame(WebSocketFrame.binaryFrame(cast(data, ByteArray)));
+		else
+			dispatchEvent(new ErrorEvent("Can't send data of unknown type - String and ByteArray only."));
+	}
+	
+	public function close(?code : Int = CloseEvent.CLOSE_NO_STATUS, ?reason : String = "No reason.") : Void
+	{
+		if (readyState == CLOSED)
+		{
+			dispatchEvent(new ErrorEvent("Can't close WebSocket - WebSocket already closed."));
+			return;
+		}
+		if (code == CloseEvent.CLOSE_ABNORMAL || readyState == CONNECTING)
+		{
+			closeSocket(code, reason, false);
+			return;
+		}
+		if (readyState == OPEN)
+		{
+			readyState = CLOSING;
+			sendFrame(WebSocketFrame.closeFrame(code, reason));
+			closeSocket(code, reason, true);
+		}
+	}
+	
+	public var onopen : Dynamic->Void;
+	public var onmessage : Dynamic->Void;
+	public var onclose : Dynamic->Void;
+	public var onerror : Dynamic->Void;
+	
+	private function closeSocket(code : Int, reason : String, wasClean : Bool) : Void
+	{
+		if (readyState == CLOSED)
+			return;
+		readyState = CLOSED;
+		_buffer = new ByteArray();
+		_framesQueue = new Array<WebSocketFrame>();
+		_framesPayloadLength = Int32.ofInt(0);
+		try
+		{
+			_socket.close();
+		}
+		catch (e : Dynamic)
+		{
+			// Do nothing
+		}
+		dispatchEvent(new CloseEvent(code, reason, wasClean));
+	}
+	
+	private function sendFrame(frame : WebSocketFrame) : Void
+	{
+		if (readyState != OPEN && frame.opcode != 0x8)
+		{
+			dispatchEvent(new ErrorEvent("Can't send data while socket is not opened."));
+			return;
+		}
+		#if flash
+		var mask = new ByteArray();
+		mask.length = 4;
+		#else
+		var mask = new ByteArray(4);
+		#end
+		for (i in 0...mask.length)
+			mask[i] = Std.random(256);
+		
+		var payloadLength = frame.payload.length;
+		var data = new ByteArray();
+		data.writeByte((frame.fin ? 0x80 : 0x00) | (frame.rsv << 4) | frame.opcode);
+		if (payloadLength <  126)
+			data.writeByte(0x80 | payloadLength);
+		else if (payloadLength < 65536)
+		{
+			data.writeByte(0x80 | 126);
+			data.writeShort(payloadLength);
+		}
+		else if (payloadLength < 4294967296)
+		{
+			data.writeByte(0x80 | 127);
+			data.writeUnsignedInt(0);
+			data.writeUnsignedInt(payloadLength);
+		}
+		else
+			dispatchEvent(new ErrorEvent("Sended data is too long."));
+		data.writeBytes(mask);
+		
+		#if flash
+		var payload = new ByteArray();
+		payload.length = payloadLength;
+		#else
+		var payload = new ByteArray(payloadLength);
+		#end
+		for (i in 0...payloadLength)
+			payload[i] = frame.payload[i] ^ mask[i % 4];
+		
+		try
+		{
+			_socket.writeBytes(data);
+			_socket.writeBytes(payload);
+			_socket.flush();
+		}
+		catch (e : Dynamic)
+		{
+			close(CloseEvent.CLOSE_ABNORMAL, "Socket sending error.");
+		}
+	}
+	
+	private function onSocketData(event : ProgressEvent) : Void
+	{
+		if (readyState == CLOSED)
+			return;
+			
+		try
+		{
+			_socket.readBytes(_buffer);
+		}
+		catch (e : Dynamic)
+		{
+			close(CloseEvent.CLOSE_ABNORMAL, "Socket receiving data error.");
+		}
+
+		if (readyState == CONNECTING)
+		{
+			// Read handshake
+			var headersDelimeter = _buffer.toString().indexOf("\r\n\r\n");
+			if (headersDelimeter >= 0)
+			{
+				_buffer.position = 0;
+				var headersArray : Array<String> = _buffer.readUTFBytes(headersDelimeter).split("\r\n");
+				var newBuffer = new ByteArray();
+				_buffer.readUTFBytes(4); // pass "\r\n\r\n"
+				_buffer.readBytes(newBuffer);
+				_buffer = newBuffer;
+				
+				if (headersArray.length == 0 || headersArray[0].substr(0, 12) != "HTTP/1.1 101")
+				{
+					close(CloseEvent.CLOSE_ABNORMAL, "Bad response: " + (headersArray.length == 0 ? "No headers." : headersArray[0]));
+					return;
+				}
+				else
+					headersArray.shift();
+				
+				var headers = new Hash<String>();
+				for (headerString in headersArray)
+				{
+					var delim = headerString.indexOf(":");
+					if (delim == -1)
+					{
+						close(CloseEvent.CLOSE_ABNORMAL, "Bad header: " + headerString);
+						return;
+					}
+					var name = StringTools.trim(headerString.substr(0, delim).toLowerCase());
+					var value = StringTools.trim(headerString.substr(delim + 1));
+					headers.set(name, value);
+				}
+				
+				if (headers.get("upgrade").toLowerCase() != "websocket")
+				{
+					close(CloseEvent.CLOSE_ABNORMAL, "Bad upgrade header: " + headers.get("upgrade"));
+					return;
+				}
+				
+				if (headers.get("connection").toLowerCase() != "upgrade")
+				{
+					close(CloseEvent.CLOSE_ABNORMAL, "Bad connection header: " + headers.get("connection"));
+					return;
+				}
+				
+				if (headers.get("sec-websocket-accept") != _expectedKey)
+				{
+					close(CloseEvent.CLOSE_ABNORMAL, "Key [" + headers.get("sec-websocket-accept") + "] not equals to expected [" + _expectedKey + "].");
+					return;
+				}
+				
+				if (_protocols.length > 0)
+				{
+					protocol = headers.get("sec-websocket-protocol");
+					if (!Lambda.has(_protocols, protocol))
+					{
+						close(CloseEvent.CLOSE_ABNORMAL, "Server protocol [" + headers.get("sec-websocket-protocol") + "] not equals to exprected protocols [" + _protocols.join(",") + "].");
+						return;
+					}
+				}
+				
+				readyState = OPEN;
+				dispatchEvent(new Event(Event.OPEN));
+			}
+		}
+		else
+		{
+			// Read frames
+			while (WebSocketFrame.isFrameReady(_buffer))
+			{
+				var frame = WebSocketFrame.readFrame(_buffer);
+				var newBuffer = new ByteArray();
+				_buffer.readBytes(newBuffer);
+				_buffer = newBuffer;
+				if (frame.rsv != 0)
+					close(CloseEvent.CLOSE_PROTOCOL_ERROR, "RSV must be 0.");
+				else if (frame.mask)
+					close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Get masked frame from server.");
+				else if (frame.overflow)
+					close(CloseEvent.CLOSE_TOO_LARGE, "Frame length is too big.");
+				else if (frame.opcode >= 0x08 && frame.opcode <= 0x0f && frame.payload.length >= 126)
+					close(CloseEvent.CLOSE_TOO_LARGE, "Payload length of control frame more than 125 bytes.");
+				else
+				{
+					switch (frame.opcode)
+					{
+						case 0x0: // Continuation frame
+						{
+							if (_framesQueue.length == 0)
+							{
+								close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received unexpected continuation frame.");
+								continue;
+							}
+							_framesPayloadLength = Int32.add(_framesPayloadLength, Int32.ofInt(frame.payload.length));
+							try
+							{
+								var messageLength = Int32.toInt(_framesPayloadLength);
+							}
+							catch (e : Dynamic)
+							{
+								// Overflow
+								close(CloseEvent.CLOSE_TOO_LARGE, "Received message is too big.");
+								_framesQueue.splice(0, _framesQueue.length);
+								_framesPayloadLength = Int32.ofInt(0);
+								continue;
+							}
+							_framesQueue.push(frame);
+							if (frame.fin)
+							{
+								if (readyState == OPEN) // Dispatch Messages only in OPEN state
+								{
+									var payload = new ByteArray();
+									for (queueFrame in _framesQueue)
+										queueFrame.payload.readBytes(payload);
+									switch (_framesQueue[0].opcode)
+									{
+										case 0x1: // Text frame
+										{
+											dispatchEvent(new MessageEvent(payload.readMultiByte(payload.length, "utf-8")));
+										}
+										case 0x2: // Binary frame
+										{
+											dispatchEvent(new MessageEvent(payload));
+										}
+									}
+								}
+								_framesQueue.splice(0, _framesQueue.length);
+								_framesPayloadLength = Int32.ofInt(0);
+							}
+						}
+						case 0x1: // Text frame
+						{
+							if (_framesQueue.length != 0)
+							{
+								close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received Text Frame during continuation.");
+								continue;
+							}
+							if (frame.fin && (readyState == OPEN))
+							{
+								dispatchEvent(new MessageEvent(frame.payload.readMultiByte(frame.payload.length, "utf-8")));
+							}
+							else
+								_framesQueue.push(frame);
+						}
+						case 0x2: // Binary frame
+						{
+							if (_framesQueue.length != 0)
+							{
+								close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received Binary Frame during continuation.");
+								continue;
+							}
+							if (frame.fin && (readyState == OPEN))
+							{
+								dispatchEvent(new MessageEvent(frame.payload));
+							}
+							else
+								_framesQueue.push(frame);
+						}
+						case 0x8: // Close frame
+						{
+							var code  = CloseEvent.CLOSE_NO_STATUS;
+							var reason = "";
+							if (frame.payload.length >= 2)
+							{
+								code = frame.payload.readUnsignedShort();
+								reason = frame.payload.readMultiByte(frame.payload.bytesAvailable, "utf-8");
+							}
+							
+							if (readyState == CLOSING)
+							{
+								closeSocket(code, reason, true);
+							}
+							else
+							{
+								close(code, reason);
+								if (readyState != CLOSED)
+									closeSocket(code, reason, true);
+							}
+						}
+						case 0x9: // Ping
+						{
+							sendFrame(WebSocketFrame.pongFrame(frame.payload));
+						}
+						case 0xA: // Pong
+						{
+							
+						}
+						default:
+							close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received unknown opcode[" + frame.opcode + "].");
+					}
+				}
+			}
+		}
+	}
+	
+	private function onSocketConnect(event : Event) : Void
+	{
+		if (readyState == CLOSED)
+			return;
+		#if flash
+		var requestBytes = new ByteArray();
+		requestBytes.length = 16;
+		#else
+		var requestBytes = new ByteArray(16);
+		#end
+		for (i in 0...requestBytes.length)
+			requestBytes[i] = Std.random(256);
+		var requestKey = BaseCode64.encodeByteArray(requestBytes);
+		var shaKey = SHA1.encode(requestKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+		requestBytes.clear();
+		for (i in 0...Std.int(shaKey.length / 2))
+			requestBytes.writeByte(Std.parseInt("0x" + shaKey.substr(i * 2, 2)));		
+		_expectedKey = BaseCode64.encodeByteArray(requestBytes);
+		var request = "GET " + _uri.path + " HTTP/1.1\r\n" +
+		"Host: " + _uri.host + (_uri.port == "" ? "" : (":" + _uri.port)) + "\r\n" +
+		"Upgrade: websocket\r\n" +
+		"Connection: Upgrade\r\n" + 
+		"Sec-WebSocket-Key: " + requestKey + "\r\n" + 
+		"Origin: " + "socket.io-nme-client" + "\r\n" + // TODO: Get origin from host
+		"Sec-WebSocket-Version: 13\r\n";
+		if (_protocols.length > 0)
+			request += "Sec-WebSocket-Protocol: " + _protocols.join(",") + "\r\n";
+		request += "\r\n";
+		try
+		{
+			_socket.writeUTFBytes(request);
+			_socket.flush();
+		}
+		catch (e : Dynamic)
+		{
+			close(CloseEvent.CLOSE_ABNORMAL, "Socket sending handshake error.");
+		}
+	}
+	
+	private function onSocketClose(event : Event) : Void
+	{
+		if (readyState != CLOSED)
+		{
+			readyState = CLOSED;
+			dispatchEvent(new CloseEvent(CloseEvent.CLOSE_ABNORMAL, "Closed without close handshake.", false));
+		}
+	}
+	
+	private function onSocketIOError(event : IOErrorEvent) : Void
+	{
+		if (readyState != CLOSED)
+			close(CloseEvent.CLOSE_ABNORMAL, readyState == CONNECTING ? 
+				"Can't connect to url[" + url + "]. IOError [" + event.text + "]." : 
+				"Error communicating with url[" + url + "]. IOError [" + event.text + "].");
+	}
+	
+	private function onSocketSecurityError(event : SecurityErrorEvent) : Void
+	{
+		if (readyState != CLOSED)
+		{
+			close(CloseEvent.CLOSE_ABNORMAL, readyState == CONNECTING ?
+				"Can't connect to url[" + url + "]. SecurityError [" + event.text + "]." :
+				"Error communicating with url[" + url + "]. SecurityError [" + event.text + "].");
+		}
+	}
+	
+	private function onOpen(event : Event) : Void
+	{
+		if (onopen != null)
+			onopen(event);
+	}
+	
+	private function onClose(event : CloseEvent) : Void
+	{
+		if (onclose != null)
+			onclose(event);
+	}
+	
+	private function onMessage(event : MessageEvent) : Void
+	{
+		if (onmessage != null)
+			onmessage(event);
+	}
+	
+	private function onError(event : ErrorEvent) : Void
+	{
+		if (onerror != null)
+			onerror(event);
+	}
+	
+	private var _protocols : Array<String>;
+	private var _uri : URLParser;
+	private var _socket : Socket;
+	private var _buffer : ByteArray;
+	private var _expectedKey : String;
+	private var _framesQueue : Array<WebSocketFrame>;
+	private var _framesPayloadLength : Int32;
+}
+
+private class WebSocketFrame
+{
+	public var fin : Bool;
+	public var rsv : Int;
+	public var opcode : Int;
+	public var mask : Bool;
+	public var overflow : Bool; // Data overflow
+	public var payload : ByteArray;
+		
+	private function new()
+	{
+		fin = true;
+		rsv = 0;
+		opcode = 0;
+		mask = true;
+		overflow = false;
+	}
+	
+	public static function readFrame(buffer : ByteArray) : WebSocketFrame
+	{
+		var frame = new WebSocketFrame();
+		frame.fin = (buffer[0] & 0x80) != 0;
+		frame.rsv = (buffer[0] & 0x70) >> 4;
+		frame.opcode = buffer[0] & 0x0f;
+		frame.mask = (buffer[1] & 0x80) != 0;
+		var payloadLength = buffer[1] & 0x7f;
+		buffer.position = 2;
+		if (payloadLength == 126)
+		{
+			payloadLength = buffer.readUnsignedShort();
+		}
+		else if (payloadLength == 127)
+		{
+			var bigLength = buffer.readUnsignedInt();
+			if (bigLength != 0)
+				frame.overflow = true;
+			payloadLength = buffer.readUnsignedInt();
+		}
+		frame.payload = new ByteArray();
+		buffer.readBytes(frame.payload, 0, payloadLength);
+		return frame;
+	}
+	
+	public static function isFrameReady(buffer : ByteArray) : Bool
+	{
+		var headersLength : Int = 2; // Min length
+		if (cast(buffer.length, Int) < headersLength)
+			return false;
+		var payloadLength : Int = buffer[1] & 0x7f;
+		if (payloadLength == 126)
+		{
+			headersLength = 4;
+			if (cast(buffer.length, Int) < headersLength)
+				return false;
+			buffer.position = 2;
+			payloadLength = buffer.readUnsignedShort();
+		}
+		else if (payloadLength == 127)
+		{
+			headersLength = 10;
+			if (cast(buffer.length, Int) < headersLength)
+				return false;
+			buffer.position = 2;
+			buffer.readUnsignedInt();
+			payloadLength = buffer.readUnsignedInt();
+		}
+		if (cast(buffer.length, Int) < headersLength + payloadLength)
+			return false;
+		return true;
+	}
+	
+	public static function textFrame(text : String) : WebSocketFrame
+	{
+		var frame = new WebSocketFrame();
+		frame.opcode = 0x1;
+		frame.payload = new ByteArray();
+		frame.payload.writeUTFBytes(text);
+		return frame;
+	}
+	
+	public static function binaryFrame(data : ByteArray) : WebSocketFrame
+	{
+		var frame = new WebSocketFrame();
+		frame.opcode = 0x2;
+		frame.payload = new ByteArray();
+		frame.payload.writeBytes(data);
+		return frame;
+	}
+	
+	public static function pongFrame(ping : ByteArray) : WebSocketFrame
+	{
+		var frame = new WebSocketFrame();
+		frame.opcode = 0xA;
+		frame.payload = ping;
+		return frame;
+	}
+	
+	public static function closeFrame(code : Int, reason : String) : WebSocketFrame
+	{
+		var frame = new WebSocketFrame();
+		frame.opcode = 0x8;
+		frame.payload = new ByteArray();
+		if (code != CloseEvent.CLOSE_NO_STATUS)
+		{
+			frame.payload.writeShort(code);
+			frame.payload.writeUTFBytes(reason);
+		}
+		return frame;
+	}
+}
+
 #end

@@ -71,6 +71,11 @@ class URLParser
 			secure = true;
 		else
 			secure = false;
+			
+		if (host == null)
+			host = "localhost";
+		if (port == null || Std.parseInt(port) == null)
+			port = "";
     }
  
     public function toString() : String
