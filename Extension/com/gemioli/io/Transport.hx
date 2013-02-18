@@ -62,45 +62,46 @@ class Transport extends EventDispatcher
 	{
 		if (data != null)
 			_data += data;
-		if (_dataLength == -1)
+		while (_data.length > 0)
 		{
-			var dataLengthString : String = "";
-			for (i in 0...Utf8.length(_data))
+			if (_dataLength == -1)
 			{
-				var ch = Utf8.charCodeAt(_data, i);
-				if (i == 0)
+				var dataLengthString : String = "";
+				for (i in 0...Utf8.length(_data))
 				{
-					if (ch != 0xfffd)
+					var ch = Utf8.charCodeAt(_data, i);
+					if (i == 0)
 					{
-						var message = _data;
-						_data = "";
-						dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, message));
-						return;
+						if (ch != 0xfffd)
+						{
+							var message = _data;
+							_data = "";
+							dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, message));
+							break;
+						}
 					}
-				}
-				else if (i > 0)
-				{
-					if (ch == 0xfffd)
+					else if (i > 0)
 					{
-						_data = Utils.Utf8Substr(_data, i + 1, Utf8.length(_data) - i - 1);
-						_dataLength = Std.parseInt(dataLengthString);
-						decode();
-						return;
+						if (ch == 0xfffd)
+						{
+							_data = Utils.Utf8Substr(_data, i + 1, Utf8.length(_data) - i - 1);
+							_dataLength = Std.parseInt(dataLengthString);
+							break;
+						}
+						else
+							dataLengthString += String.fromCharCode(ch);
 					}
-					else
-						dataLengthString += String.fromCharCode(ch);
 				}
 			}
-		}
-		else
-		{
-			if (_dataLength <= Utf8.length(_data))
+			else
 			{
-				var message = Utils.Utf8Substr(_data, 0, _dataLength);
-				_data = Utils.Utf8Substr(_data, _dataLength, Utf8.length(_data) - _dataLength);
-				_dataLength = -1;
-				dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, message));
-				decode();
+				if (_dataLength <= Utf8.length(_data))
+				{
+					var message = Utils.Utf8Substr(_data, 0, _dataLength);
+					_data = Utils.Utf8Substr(_data, _dataLength, Utf8.length(_data) - _dataLength);
+					_dataLength = -1;
+					dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, message));
+				}
 			}
 		}
 	}

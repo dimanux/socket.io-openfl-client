@@ -28,6 +28,7 @@ import nme.errors.SecurityError;
 import nme.events.Event;
 import nme.events.HTTPStatusEvent;
 import nme.events.IOErrorEvent;
+import nme.events.SecurityErrorEvent;
 import nme.net.URLLoader;
 import nme.net.URLRequest;
 import nme.net.URLRequestMethod;
@@ -59,12 +60,14 @@ class XHRPollingTransport extends Transport
 		_recvLoader.addEventListener(Event.COMPLETE, onRecvComplete);
 		_recvLoader.addEventListener(HTTPStatusEvent.HTTP_STATUS, onRecvStatus);
 		_recvLoader.addEventListener(IOErrorEvent.IO_ERROR, onRecvError);
+		_recvLoader.addEventListener(SecurityErrorEvent.SECURITY_ERROR, onRecvSecurityError);
 		
 		_sendRequest = new URLRequest();
 		_sendRequest.method = URLRequestMethod.POST;
 		_sendLoader = new URLLoader();
 		_sendLoader.addEventListener(HTTPStatusEvent.HTTP_STATUS, onSendStatus);
 		_sendLoader.addEventListener(IOErrorEvent.IO_ERROR, onSendError);
+		_sendLoader.addEventListener(SecurityErrorEvent.SECURITY_ERROR, onSendSecurityError);
 		
 		nextRecv();
 		
@@ -113,13 +116,28 @@ class XHRPollingTransport extends Transport
 	private function onRecvStatus(event : HTTPStatusEvent) : Void
 	{
 		if (event.status != 200 && _recvLoader != null)
+		{
+			traceError("Recv stream status error[" + event.status + "].");
 			close();
+		}
 	}
 	
 	private function onRecvError(event : IOErrorEvent) : Void
 	{
 		if (_recvLoader != null)
+		{
+			traceError("Recv stream IO error.");
 			close();
+		}
+	}
+	
+	private function onRecvSecurityError(event : SecurityErrorEvent) : Void
+	{
+		if (_recvLoader != null)
+		{
+			traceError("Recv stream security error.");
+			close();
+		}
 	}
 	
 	private function nextSend() : Void
@@ -158,13 +176,33 @@ class XHRPollingTransport extends Transport
 	private function onSendStatus(event : HTTPStatusEvent) : Void
 	{
 		if (event.status != 200 && _sendLoader != null)
+		{
+			traceError("Send stream status error[" + event.status + "].");
 			close();
+		}
 	}
 	
 	private function onSendError(event : IOErrorEvent) : Void
 	{
 		if (_sendLoader != null)
+		{
+			traceError("Send stream IO error.");
 			close();
+		}
+	}
+	
+	private function onSendSecurityError(event : SecurityErrorEvent) : Void
+	{
+		if (_sendLoader != null)
+		{
+			traceError("Send stream security error.");
+			close();
+		}
+	}
+	
+	private function traceError(message : String) : Void
+	{
+		trace("xhr-polling transport error: " + message);
 	}
 	
 	private var _url : String;

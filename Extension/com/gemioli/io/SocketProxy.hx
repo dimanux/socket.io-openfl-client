@@ -31,6 +31,7 @@ import com.gemioli.io.transports.XHRPollingTransport;
 import com.gemioli.io.utils.Utils;
 import haxe.Utf8;
 import nme.events.EventDispatcher;
+import nme.events.SecurityErrorEvent;
 import nme.net.URLLoader;
 import nme.net.URLRequest;
 import nme.net.URLRequestMethod;
@@ -112,6 +113,7 @@ class SocketProxy extends EventDispatcher
 		_handshakeLoader.addEventListener(Event.COMPLETE, onHandshake);
 		_handshakeLoader.addEventListener(HTTPStatusEvent.HTTP_STATUS, onHandshakeStatus);
 		_handshakeLoader.addEventListener(IOErrorEvent.IO_ERROR, onHandshakeError);
+		_handshakeLoader.addEventListener(SecurityErrorEvent.SECURITY_ERROR, onHandshakeSecurityError);
 		_handshakeLoader.load(handshakeRequest);
 	}
 	
@@ -141,6 +143,7 @@ class SocketProxy extends EventDispatcher
 	{
 		if (event.status != 200 && connectionStatus == SocketConnectionStatus.CONNECTING)
 		{
+			dispatchErrorEvent("Handshake status error [" + event.status + "]", "Check server status.");
 			disconnectEndpoints();
 		}
 	}
@@ -149,8 +152,26 @@ class SocketProxy extends EventDispatcher
 	{
 		if (connectionStatus == SocketConnectionStatus.CONNECTING)
 		{
+			dispatchErrorEvent("Handshake IO error.", "Check connection.");
 			disconnectEndpoints();
 		}
+	}
+	
+	private function onHandshakeSecurityError(event : SecurityErrorEvent) : Void
+	{
+		if (connectionStatus == SocketConnectionStatus.CONNECTING)
+		{
+			dispatchErrorEvent("Handshake security error [" + event.text + "].", "Check flash policy server.");
+			disconnectEndpoints();
+		}
+	}
+	
+	private function dispatchErrorEvent(reason : String, advice : String) : Void
+	{
+		var message = "[" + _transportName + "] " + reason + "+" + advice;
+		var endpoints = _endpoints.copy();
+		for (endpoint in endpoints)
+			dispatchEvent(new SocketProxyEvent(endpoint, 7, "", message));
 	}
 	
 	private function disconnectEndpoints() : Void

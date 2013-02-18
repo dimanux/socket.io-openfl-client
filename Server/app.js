@@ -2,9 +2,32 @@ var app = require('http').createServer(handler)
   , io = require('socket.io').listen(app)
   , fs = require('fs')
 
+io.set('flash policy port', -1)
+
+io.set('transports', [
+    'websocket'
+  , 'flashsocket'
+  , 'htmlfile'
+  , 'xhr-polling'
+  , 'jsonp-polling'
+]);
+  
 app.listen(8080);
 
 function handler (req, res) {
+  if (req.url == '/crossdomain.xml')
+  {
+	  fs.readFile(__dirname + '/crossdomain.xml',
+	  function (err, data) {
+		if (err) {
+		  res.writeHead(500);
+		  return res.end('Error loading cd.xml');
+		}
+		res.writeHead(200, {'Content-Type': 'text/plain'});
+		res.end(data);
+	  });
+	  return;
+  }
   fs.readFile(__dirname + '/index.html',
   function (err, data) {
     if (err) {

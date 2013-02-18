@@ -9,13 +9,12 @@ Socket.io NME client extension.
 <li>Multiplexing of sockets</li>
 <li>Automatic reconnection of sockets</li>
 <li>WebSocket and xhr-polling transports</li>
-<li>Socket options: transports, reconnect, reconnectionAttempts, reconnectionDelay, connectTimeout</li>
+<li>Socket options: transports, reconnect, reconnectionAttempts, reconnectionDelay, connectTimeout, flashPolicyPort, flashPolicyUrl</li>
 </ul>
 
 ###ToDo:
 <ul>
 <li>Secure connections</li>
-<li>Flash Policy</li>
 <li>Optimizations</li>
 </ul>
 

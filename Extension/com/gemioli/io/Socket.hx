@@ -69,7 +69,18 @@ class Socket extends EventDispatcher
 				_connectTimeout = options.connectTimeout;
 			if (Std.is(options.transports, Array))
 				_transports = options.transports;
+			if (Std.is(options.flashPolicyPort, Int))
+				_flashPolicyPort = options.flashPolicyPort;
+			if (Std.is(options.flashPolicyUrl, String))
+				_flashPolicyUrl = options.flashPolicyUrl;
 		}
+		
+		#if flash
+		flash.system.Security.allowDomain("*");
+		if (_flashPolicyUrl == null)
+			_flashPolicyUrl = "xmlsocket://" + uriParsed.host + ":" + _flashPolicyPort;
+		flash.system.Security.loadPolicyFile(_flashPolicyUrl);
+		#end
 		
 		if (_transports == null || _transports.length == 0)
 		{
@@ -370,4 +381,6 @@ class Socket extends EventDispatcher
 	private var _reconnect : Bool = true;
 	private var _maxReconnectionAttempts : Int = 10;
 	private var _reconnectionDelay : Int = 500; // ms
+	private var _flashPolicyPort : Int = 843;
+	private var _flashPolicyUrl : String = null;
 }
