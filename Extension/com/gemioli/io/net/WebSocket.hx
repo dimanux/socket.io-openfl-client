@@ -74,7 +74,8 @@ import flash.net.Socket;
 #else // cpp
 import sys.net.Host;
 import cpp.vm.Thread;
-import haxe.Timer;
+import nme.utils.Timer;
+import nme.events.TimerEvent;
 import haxe.io.Error;
 
 private class Socket extends EventDispatcher
@@ -83,7 +84,8 @@ private class Socket extends EventDispatcher
 	{
 		super();
 		_socket = new sys.net.Socket();
-		_timer = new Timer(0);
+		_timer = new Timer(0.0);
+		_timer.addEventListener(TimerEvent.TIMER, socketLoop);
 	}
 	
 	public function connect(host : String, port : Int) : Void
@@ -92,7 +94,7 @@ private class Socket extends EventDispatcher
 		{
 			_socket.connect(new Host(host), port);
 			_socket.setBlocking(false);
-			_timer.run = socketLoop;
+			_timer.start();
 			var mainThread = Thread.current();
 			_readThread = Thread.create(function() {
 				readLoop(mainThread);
@@ -114,7 +116,7 @@ private class Socket extends EventDispatcher
 			return;
 		}
 		_readThread = null;
-		_timer.run = function() {};
+		_timer.stop();
 		_socket.close();
 		dispatchEvent(new Event(Event.CLOSE));
 	}
@@ -190,7 +192,7 @@ private class Socket extends EventDispatcher
 		}
 	}
 	
-	private function socketLoop() : Void
+	private function socketLoop(event : TimerEvent) : Void
 	{
 		try
 		{
@@ -353,7 +355,7 @@ class WebSocket extends EventDispatcher
 			data.writeByte(0x80 | 126);
 			data.writeShort(payloadLength);
 		}
-		else if (payloadLength < 4294967296)
+		else if (payloadLength <= 4294967295)
 		{
 			data.writeByte(0x80 | 127);
 			data.writeUnsignedInt(0);
