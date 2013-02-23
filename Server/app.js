@@ -43,10 +43,8 @@ io.sockets.on('connection', function (socket) {
   socket.send('Hello');
   socket.on('message', function(msg) {
 	console.log("Client say [" + msg + "]");
-	if (msg == "Ping")
-		socket.send("Pong");
   });
-  socket.emit("ServerEvent", {name : 'Jerry'});
+  socket.emit('ServerEvent', {name : 'Jerry'});
   socket.on('ClientEventEmpty', function () {
     console.log('ClientEventEmpty');
   });
@@ -56,6 +54,10 @@ io.sockets.on('connection', function (socket) {
   socket.on('ClientEventCallback', function (fn) {
     console.log('ClientEventCallback');
 	fn('Done');
+  });
+  socket.on('Ping', function (data) {
+	console.log('Ping packet ' + data);
+	socket.emit('Pong', data);
   });
 });
 

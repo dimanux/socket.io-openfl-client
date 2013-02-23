@@ -22,7 +22,6 @@
 
 package com.gemioli;
 
-
 import nme.display.Sprite;
 import nme.display.StageAlign;
 import nme.display.StageScaleMode;
@@ -72,11 +71,11 @@ class ExtensionTest extends Sprite
 			trace("Error: " + event.args.reason + " " + event.args.advice);
 		});
 		_socket.addEventListener(SocketEvent.MESSAGE, function(event : SocketEvent) : Void {
-			trace("Message: [" + event.args + "]");
 			if (event.args == "Hello")
+			{
+				trace("Hello from server!");
 				_socket.send("Hi");
-			else if (event.args == "Pong")
-				_socket.send("Ping");
+			}
 		});
 		_socket.addEventListener(SocketEvent.RECONNECTING, function(event : SocketEvent) : Void {
 			trace("Reconnecting...");
@@ -94,8 +93,14 @@ class ExtensionTest extends Sprite
 			_socket.emit("ClientEventCallback", null, function(data : Dynamic) : Void {
 				trace("Callback data[" + data[0] + "]");
 				trace("Starting ping-pong...");
-				_socket.send("Ping");
+				_pingId = 0;
+				_socket.emit("Ping", _pingId);
 			});
+		});
+		_socket.addEventListener("Pong", function (event : SocketEvent) : Void {
+			trace("Received pong " + event.args[0]);
+			trace("Sending ping " + (++_pingId));
+			_socket.emit("Ping", _pingId);
 		});
 		_socket.connect();
 		
@@ -144,6 +149,7 @@ class ExtensionTest extends Sprite
 	
 	private var _socket : Socket;
 	private var _socketChat : Socket;
+	private var _pingId : Int;
 	
 	public static function main()
 	{

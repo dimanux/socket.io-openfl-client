@@ -1,13 +1,14 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
   var socket = io.connect('/');
+  var pingId = 0;
   
   socket.on('message', function (msg) {
-	console.log('Message [' + msg + ']');
 	if (msg == 'Hello')
+	{
+		console.log('Hello from server!');
 		socket.send('Hi');
-	else if (msg == 'Pong')
-		socket.send('Ping');
+	}
   });
   
   socket.on('ServerEvent', function(data) {
@@ -17,8 +18,14 @@
 	socket.emit('ClientEventCallback', function(data) {
 		console.log('Callback data[' + data + ']');
 		console.log('Starting ping-pong...');
-		socket.send('Ping');
+		socket.emit('Ping', pingId);
 	});
+  });
+  
+  socket.on('Pong', function(data) {
+	console.log('Received pong ' + data);
+	console.log('Sending ping ' + (++pingId));
+	socket.emit('Ping', pingId);
   });
   
   socket.on('connecting', function() {

@@ -64,6 +64,7 @@ import haxe.io.Eof;
 import haxe.SHA1;
 import nme.events.Event;
 import nme.events.EventDispatcher;
+import nme.Lib;
 import nme.utils.ByteArray;
 import nme.events.ProgressEvent;
 import nme.events.IOErrorEvent;
@@ -74,8 +75,6 @@ import flash.net.Socket;
 #else // cpp
 import sys.net.Host;
 import cpp.vm.Thread;
-import nme.utils.Timer;
-import nme.events.TimerEvent;
 import haxe.io.Error;
 
 private class Socket extends EventDispatcher
@@ -84,8 +83,7 @@ private class Socket extends EventDispatcher
 	{
 		super();
 		_socket = new sys.net.Socket();
-		_timer = new Timer(0.0);
-		_timer.addEventListener(TimerEvent.TIMER, socketLoop);
+		_running = false;
 	}
 	
 	public function connect(host : String, port : Int) : Void
@@ -94,30 +92,27 @@ private class Socket extends EventDispatcher
 		{
 			_socket.connect(new Host(host), port);
 			_socket.setBlocking(false);
-			_timer.start();
-			var mainThread = Thread.current();
-			_readThread = Thread.create(function() {
-				readLoop(mainThread);
-			});
+			Lib.current.stage.addEventListener(Event.ENTER_FRAME, socketLoop);
 		}
 		catch (e : Dynamic)
 		{
 			dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Socket can't connect to host[" + host + ":" + port + "]"));
 			return;
 		}
+		_running = true;
 		dispatchEvent(new Event(Event.CONNECT));
 	}
 	
 	public function close() : Void
 	{
-		if (_readThread == null)
+		if (!_running)
 		{
 			dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Close failed - socket is not opened."));
 			return;
 		}
-		_readThread = null;
-		_timer.stop();
+		Lib.current.stage.removeEventListener(Event.ENTER_FRAME, socketLoop);
 		_socket.close();
+		_running = false;
 		dispatchEvent(new Event(Event.CLOSE));
 	}
 	
@@ -125,7 +120,7 @@ private class Socket extends EventDispatcher
 	{
 		try
 		{
-			if (_readThread == null)
+			if (!_running)
 			{
 				dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't write bytes to socket - socket is closed."));
 				return;
@@ -142,7 +137,7 @@ private class Socket extends EventDispatcher
 	{
 		try
 		{
-			if (_readThread == null)
+			if (!_running)
 			{
 				dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't write UTFBytes to socket - socket is closed."));
 				return;
@@ -159,7 +154,7 @@ private class Socket extends EventDispatcher
 	{
 		try
 		{
-			if (_readThread == null)
+			if (!_running)
 			{
 				dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't flush socket - socket is closed."));
 				return;
@@ -172,19 +167,36 @@ private class Socket extends EventDispatcher
 		}
 	}
 	
-	public function readBytes(bytes : ByteArray, offset : Int = 0, length : Int = 0) : Void
+	public function readBytes(bytes : ByteArray) : Void
 	{
 		try
 		{
-			if (_readThread == null)
+			if (!_running)
 			{
 				dispatchEvent(new IOErrorEvent(IOErrorEvent.IO_ERROR, false, false, "Can't read bytes from socket - socket is closed."));
 				return;
 			}
-			if (length == 0)
-				bytes.writeBytes(_socket.input.readAll(), offset);
-			else
-				_socket.input.readBytes(bytes, offset, length);
+			var buf = new ByteArray(1 << 14);
+			while (true)
+			{
+				try
+				{
+					var length = _socket.input.readBytes(buf, 0, 1 << 14);
+					bytes.writeBytes(buf, 0, length);
+				}
+				catch (e : Eof)
+				{
+					close();
+					break;
+				}
+				catch (e : Error)
+				{
+					if (e == Blocked)
+						break;
+					else
+						throw e;
+				}
+			}
 		}
 		catch (e : Dynamic)
 		{
@@ -192,36 +204,13 @@ private class Socket extends EventDispatcher
 		}
 	}
 	
-	private function socketLoop(event : TimerEvent) : Void
+	private function socketLoop(event : Event) : Void
 	{
-		try
-		{
-			if (Thread.readMessage(false))
-			{
-				dispatchEvent(new ProgressEvent(ProgressEvent.SOCKET_DATA));
-				if (_readThread != null)
-					_readThread.sendMessage(true);
-			}
-		}
-		catch (e : Dynamic)
-		{
-			close();
-		}
-	}
-	
-	private function readLoop(mainThread : Thread) : Void
-	{
-		while (true)
-		{
-			_socket.waitForRead();
-			mainThread.sendMessage(true);
-			Thread.readMessage(true);
-		}
+		dispatchEvent(new ProgressEvent(ProgressEvent.SOCKET_DATA));
 	}
 	
 	private var _socket : sys.net.Socket;
-	private var _timer : Timer;
-	private var _readThread : Thread;
+	private var _running : Bool;
 }
 #end
 
@@ -373,11 +362,12 @@ class WebSocket extends EventDispatcher
 		#end
 		for (i in 0...payloadLength)
 			payload[i] = frame.payload[i] ^ mask[i % 4];
+			
+		data.writeBytes(payload, 0, payloadLength);
 		
 		try
 		{
 			_socket.writeBytes(data);
-			_socket.writeBytes(payload);
 			_socket.flush();
 		}
 		catch (e : Dynamic)
@@ -465,133 +455,138 @@ class WebSocket extends EventDispatcher
 				
 				readyState = OPEN;
 				dispatchEvent(new Event(Event.OPEN));
+				parseFrames();
 			}
 		}
 		else
 		{
-			// Read frames
-			while (WebSocketFrame.isFrameReady(_buffer))
+			parseFrames();
+		}
+	}
+	
+	private function parseFrames() : Void
+	{
+		while (WebSocketFrame.isFrameReady(_buffer))
+		{
+			var frame = WebSocketFrame.readFrame(_buffer);
+			var newBuffer = new ByteArray();
+			_buffer.readBytes(newBuffer);
+			_buffer = newBuffer;
+			if (frame.rsv != 0)
+				close(CloseEvent.CLOSE_PROTOCOL_ERROR, "RSV must be 0.");
+			else if (frame.mask)
+				close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Get masked frame from server.");
+			else if (frame.overflow)
+				close(CloseEvent.CLOSE_TOO_LARGE, "Frame length is too big.");
+			else if (frame.opcode >= 0x08 && frame.opcode <= 0x0f && frame.payload.length >= 126)
+				close(CloseEvent.CLOSE_TOO_LARGE, "Payload length of control frame more than 125 bytes.");
+			else
 			{
-				var frame = WebSocketFrame.readFrame(_buffer);
-				var newBuffer = new ByteArray();
-				_buffer.readBytes(newBuffer);
-				_buffer = newBuffer;
-				if (frame.rsv != 0)
-					close(CloseEvent.CLOSE_PROTOCOL_ERROR, "RSV must be 0.");
-				else if (frame.mask)
-					close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Get masked frame from server.");
-				else if (frame.overflow)
-					close(CloseEvent.CLOSE_TOO_LARGE, "Frame length is too big.");
-				else if (frame.opcode >= 0x08 && frame.opcode <= 0x0f && frame.payload.length >= 126)
-					close(CloseEvent.CLOSE_TOO_LARGE, "Payload length of control frame more than 125 bytes.");
-				else
+				switch (frame.opcode)
 				{
-					switch (frame.opcode)
+					case 0x0: // Continuation frame
 					{
-						case 0x0: // Continuation frame
+						if (_framesQueue.length == 0)
 						{
-							if (_framesQueue.length == 0)
+							close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received unexpected continuation frame.");
+							continue;
+						}
+						_framesPayloadLength = Int32.add(_framesPayloadLength, Int32.ofInt(frame.payload.length));
+						try
+						{
+							var messageLength = Int32.toInt(_framesPayloadLength);
+						}
+						catch (e : Dynamic)
+						{
+							// Overflow
+							close(CloseEvent.CLOSE_TOO_LARGE, "Received message is too big.");
+							_framesQueue.splice(0, _framesQueue.length);
+							_framesPayloadLength = Int32.ofInt(0);
+							continue;
+						}
+						_framesQueue.push(frame);
+						if (frame.fin)
+						{
+							if (readyState == OPEN) // Dispatch Messages only in OPEN state
 							{
-								close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received unexpected continuation frame.");
-								continue;
-							}
-							_framesPayloadLength = Int32.add(_framesPayloadLength, Int32.ofInt(frame.payload.length));
-							try
-							{
-								var messageLength = Int32.toInt(_framesPayloadLength);
-							}
-							catch (e : Dynamic)
-							{
-								// Overflow
-								close(CloseEvent.CLOSE_TOO_LARGE, "Received message is too big.");
-								_framesQueue.splice(0, _framesQueue.length);
-								_framesPayloadLength = Int32.ofInt(0);
-								continue;
-							}
-							_framesQueue.push(frame);
-							if (frame.fin)
-							{
-								if (readyState == OPEN) // Dispatch Messages only in OPEN state
+								var payload = new ByteArray();
+								for (queueFrame in _framesQueue)
+									queueFrame.payload.readBytes(payload);
+								switch (_framesQueue[0].opcode)
 								{
-									var payload = new ByteArray();
-									for (queueFrame in _framesQueue)
-										queueFrame.payload.readBytes(payload);
-									switch (_framesQueue[0].opcode)
+									case 0x1: // Text frame
 									{
-										case 0x1: // Text frame
-										{
-											dispatchEvent(new MessageEvent(payload.readMultiByte(payload.length, "utf-8")));
-										}
-										case 0x2: // Binary frame
-										{
-											dispatchEvent(new MessageEvent(payload));
-										}
+										dispatchEvent(new MessageEvent(payload.readMultiByte(payload.length, "utf-8")));
+									}
+									case 0x2: // Binary frame
+									{
+										dispatchEvent(new MessageEvent(payload));
 									}
 								}
-								_framesQueue.splice(0, _framesQueue.length);
-								_framesPayloadLength = Int32.ofInt(0);
 							}
+							_framesQueue.splice(0, _framesQueue.length);
+							_framesPayloadLength = Int32.ofInt(0);
 						}
-						case 0x1: // Text frame
-						{
-							if (_framesQueue.length != 0)
-							{
-								close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received Text Frame during continuation.");
-								continue;
-							}
-							if (frame.fin && (readyState == OPEN))
-							{
-								dispatchEvent(new MessageEvent(frame.payload.readMultiByte(frame.payload.length, "utf-8")));
-							}
-							else
-								_framesQueue.push(frame);
-						}
-						case 0x2: // Binary frame
-						{
-							if (_framesQueue.length != 0)
-							{
-								close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received Binary Frame during continuation.");
-								continue;
-							}
-							if (frame.fin && (readyState == OPEN))
-							{
-								dispatchEvent(new MessageEvent(frame.payload));
-							}
-							else
-								_framesQueue.push(frame);
-						}
-						case 0x8: // Close frame
-						{
-							var code  = CloseEvent.CLOSE_NO_STATUS;
-							var reason = "";
-							if (frame.payload.length >= 2)
-							{
-								code = frame.payload.readUnsignedShort();
-								reason = frame.payload.readMultiByte(frame.payload.bytesAvailable, "utf-8");
-							}
-							
-							if (readyState == CLOSING)
-							{
-								closeSocket(code, reason, true);
-							}
-							else
-							{
-								close(code, reason);
-								if (readyState != CLOSED)
-									closeSocket(code, reason, true);
-							}
-						}
-						case 0x9: // Ping
-						{
-							sendFrame(WebSocketFrame.pongFrame(frame.payload));
-						}
-						case 0xA: // Pong
-						{
-							
-						}
-						default:
-							close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received unknown opcode[" + frame.opcode + "].");
 					}
+					case 0x1: // Text frame
+					{
+						if (_framesQueue.length != 0)
+						{
+							close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received Text Frame during continuation.");
+							continue;
+						}
+						if (frame.fin && (readyState == OPEN))
+						{
+							dispatchEvent(new MessageEvent(frame.payload.readMultiByte(frame.payload.length, "utf-8")));
+						}
+						else
+							_framesQueue.push(frame);
+					}
+					case 0x2: // Binary frame
+					{
+						if (_framesQueue.length != 0)
+						{
+							close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received Binary Frame during continuation.");
+							continue;
+						}
+						if (frame.fin && (readyState == OPEN))
+						{
+							dispatchEvent(new MessageEvent(frame.payload));
+						}
+						else
+							_framesQueue.push(frame);
+					}
+					case 0x8: // Close frame
+					{
+						var code  = CloseEvent.CLOSE_NO_STATUS;
+						var reason = "";
+						if (frame.payload.length >= 2)
+						{
+							code = frame.payload.readUnsignedShort();
+							reason = frame.payload.readMultiByte(frame.payload.bytesAvailable, "utf-8");
+						}
+						
+						if (readyState == CLOSING)
+						{
+							closeSocket(code, reason, true);
+						}
+						else
+						{
+							close(code, reason);
+							if (readyState != CLOSED)
+								closeSocket(code, reason, true);
+						}
+					}
+					case 0x9: // Ping
+					{
+						sendFrame(WebSocketFrame.pongFrame(frame.payload));
+					}
+					case 0xA: // Pong
+					{
+						
+					}
+					default:
+						close(CloseEvent.CLOSE_PROTOCOL_ERROR, "Received unknown opcode[" + frame.opcode + "].");
 				}
 			}
 		}

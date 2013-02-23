@@ -22,8 +22,8 @@ Socket.io NME client extension.
 <ul>
 <li>Flash 11</li>
 <li>HTML5</li>
-<li>Windows (can't determine server disconnection)</li>
-<li>Android (works only xhr-polling)</li>
+<li>Windows</li>
+<li>Android</li>
 <li>iOS (not tested)</li>
 <li>Blackberry (not tested)</li>
 </ul>
