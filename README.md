@@ -38,6 +38,9 @@ Socket.io NME client extension.
 ###Example:
 See [example](https://github.com/dimanux/socket.io-nme-client/blob/master/Project/Source/com/gemioli/ExtensionTest.hx)
 
+###License:
+
+(The MIT License)
 
 Copyright (c) 2013, Dmitriy Kapustin (dimanux), gemioli.com
 
