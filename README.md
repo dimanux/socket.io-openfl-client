@@ -4,36 +4,28 @@ socket.io-nme-client
 Socket.io NME client extension.
 
 ###What's done:
-<ul>
-<li>Interface of socket.io client (v.9) (http://socket.io/#how-to-use)</li>
-<li>Multiplexing of sockets</li>
-<li>Automatic reconnection of sockets</li>
-<li>WebSocket and xhr-polling transports</li>
-<li>Socket options: transports, reconnect, reconnectionAttempts, reconnectionDelay, connectTimeout, flashPolicyPort, flashPolicyUrl</li>
-</ul>
+* Interface of socket.io client (v.9) (http://socket.io/#how-to-use)
+* Multiplexing of sockets
+* Automatic reconnection of sockets
+* WebSocket and xhr-polling transports
+* Socket options: transports, reconnect, reconnectionAttempts, reconnectionDelay, connectTimeout, flashPolicyPort, flashPolicyUrl
 
 ###ToDo:
-<ul>
-<li>Secure connections</li>
-<li>Optimizations</li>
-</ul>
+* Secure connections
+* Optimizations
 
 ###Tested with HaXe 2.10, NME 3.5.5, HXCPP 2.10.3, nodejs 0.8.18 (or dotcloud) on platforms:
-<ul>
-<li>Flash 11</li>
-<li>HTML5</li>
-<li>Windows</li>
-<li>Android</li>
-<li>iOS (not tested)</li>
-<li>Blackberry (not tested)</li>
-</ul>
+* Flash 11
+* HTML5
+* Windows
+* Android
+* iOS (not tested)
+* Blackberry (not tested)
 
 ###Folders:
-<ul>
-<li>Extension - extension code</li>
-<li>Project - example project files</li>
-<li>Server - simple nodeJS server code (run npm-install.bat, then run.bat)</li>
-</ul>
+* Extension - extension code
+* Project - example project files
+* Server - simple nodeJS server code (run npm-install.bat, then run.bat)
 
 ###Example:
 See [example](https://github.com/dimanux/socket.io-nme-client/blob/master/Project/Source/com/gemioli/ExtensionTest.hx)
