@@ -141,6 +141,8 @@ class Socket extends EventDispatcher
 			_reconnectTimer.reset();
 			_reconnectionAttemptsLeft = _maxReconnectionAttempts;
 		}
+		if (_connectTimer.running)
+			_connectTimer.stop();
 		if (connectionStatus == SocketConnectionStatus.DISCONNECTED || _proxy == null)
 			return;
 		connectionStatus = SocketConnectionStatus.DISCONNECTING;
