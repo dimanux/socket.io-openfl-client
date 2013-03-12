@@ -296,26 +296,26 @@ class Socket extends EventDispatcher
 			}
 			case 6: // ACK
 			{
+				var ack : String = message.data;
+				var args : Dynamic = null;
 				var plus = message.data.indexOf("+");
 				if (plus != -1)
 				{
-					var ack = Utils.Utf8Substr(message.data, 0, plus);
+					ack = Utils.Utf8Substr(message.data, 0, plus);
 					var data = Utils.Utf8Substr(message.data, plus + 1, Utf8.length(message.data) - plus - 1);
-					if (_callbacks.exists(ack))
+					try
 					{
-						var func = _callbacks.get(ack);
-						_callbacks.remove(ack);
-						var args = null;
-						try
-						{
-							args = Json.parse(data);
-						}
-						catch (unknown : Dynamic)
-						{
-							args = null;
-						}
-						func(args);
+						args = Json.parse(data);
 					}
+					catch (unknown : Dynamic)
+					{
+					}
+				}
+				if (_callbacks.exists(ack))
+				{
+					var func = _callbacks.get(ack);
+					_callbacks.remove(ack);
+					func(args);
 				}
 			}
 			case 7: // Error
