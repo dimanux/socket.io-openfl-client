@@ -259,6 +259,12 @@ class SocketProxy extends EventDispatcher
 			var endpoints = _endpoints.copy();
 			for (endpoint in endpoints)
 				dispatchEvent(new SocketProxyEvent(endpoint, 0, "", ""));
+		} 
+		else if (messageId == 2 && messageParts[2] == "") //heartbeat without endpoint
+		{
+			var endpoints = _endpoints.copy();
+			for (endpoint in endpoints)
+				dispatchEvent(new SocketProxyEvent(endpoint, Std.parseInt(messageParts[0]), messageParts[1], messageParts.length > 3 ? messageParts[3] : ""));
 		}
 		dispatchEvent(new SocketProxyEvent(messageParts[2], Std.parseInt(messageParts[0]), messageParts[1], messageParts.length > 3 ? messageParts[3] : ""));
 	}
