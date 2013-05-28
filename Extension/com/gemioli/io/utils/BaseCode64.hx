@@ -22,7 +22,14 @@
 
 package com.gemioli.io.utils;
 
-import haxe.BaseCode;
+
+#if haxe_211
+	import haxe.crypto.BaseCode;
+#else
+	import haxe.BaseCode;
+#end
+
+
 import haxe.io.Bytes;
 import nme.utils.ByteArray;
 
