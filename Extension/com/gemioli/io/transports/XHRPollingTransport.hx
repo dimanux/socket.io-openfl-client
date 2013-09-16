@@ -24,14 +24,28 @@ package com.gemioli.io.transports;
 
 import com.gemioli.io.events.TransportEvent;
 import com.gemioli.io.Transport;
-import nme.errors.SecurityError;
-import nme.events.Event;
-import nme.events.HTTPStatusEvent;
-import nme.events.IOErrorEvent;
-import nme.events.SecurityErrorEvent;
-import nme.net.URLLoader;
-import nme.net.URLRequest;
-import nme.net.URLRequestMethod;
+
+#if openfl
+	import flash.errors.SecurityError;
+	import flash.events.Event;
+	import flash.events.HTTPStatusEvent;
+	import flash.events.IOErrorEvent;
+	import flash.events.SecurityErrorEvent;
+	import flash.net.URLLoader;
+	import flash.net.URLRequest;
+	import flash.net.URLRequestMethod;
+#else 
+	import nme.errors.SecurityError;
+	import nme.events.Event;
+	import nme.events.HTTPStatusEvent;
+	import nme.events.IOErrorEvent;
+	import nme.events.SecurityErrorEvent;
+	import nme.net.URLLoader;
+	import nme.net.URLRequest;
+	import nme.net.URLRequestMethod;	
+#end
+
+
 
 class XHRPollingTransport extends Transport
 {

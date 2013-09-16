@@ -30,14 +30,29 @@ import com.gemioli.io.transports.WebSocketTransport;
 import com.gemioli.io.transports.XHRPollingTransport;
 import com.gemioli.io.utils.Utils;
 import haxe.Utf8;
-import nme.events.EventDispatcher;
-import nme.events.SecurityErrorEvent;
-import nme.net.URLLoader;
-import nme.net.URLRequest;
-import nme.net.URLRequestMethod;
-import nme.events.Event;
-import nme.events.IOErrorEvent;
-import nme.events.HTTPStatusEvent;
+
+#if openfl
+	import flash.events.EventDispatcher;
+	import flash.events.SecurityErrorEvent;
+	import flash.net.URLLoader;
+	import flash.net.URLRequest;
+	import flash.net.URLRequestMethod;
+	import flash.events.Event;
+	import flash.events.IOErrorEvent;
+	import flash.events.HTTPStatusEvent;
+#else 
+	import nme.events.EventDispatcher;
+	import nme.events.SecurityErrorEvent;
+	import nme.net.URLLoader;
+	import nme.net.URLRequest;
+	import nme.net.URLRequestMethod;
+	import nme.events.Event;
+	import nme.events.IOErrorEvent;
+	import nme.events.HTTPStatusEvent;	
+#end
+
+
+
 
 class SocketProxy extends EventDispatcher
 {
@@ -283,5 +298,5 @@ class SocketProxy extends EventDispatcher
 	private var _closeTimeout : Int;
 	
 	// Static proxies
-	private static var _proxies : Hash<SocketProxy> = new Hash<SocketProxy>();
+	private static var _proxies : Map<String, SocketProxy> = new Map<String, SocketProxy>();
 }

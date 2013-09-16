@@ -27,18 +27,33 @@ import com.gemioli.io.SocketProxy;
 import com.gemioli.io.events.SocketEvent;
 import com.gemioli.io.utils.URLParser;
 import com.gemioli.io.utils.Utils;
-import nme.events.EventDispatcher;
+
+#if openfl
+	import flash.events.EventDispatcher;
+	import flash.events.TimerEvent;
+	import flash.utils.Timer;
+#else 
+	import nme.events.EventDispatcher;
+	import nme.events.TimerEvent;
+	import nme.utils.Timer;
+#end
+
+
 import haxe.Json;
 import haxe.Utf8;
-import nme.events.TimerEvent;
-import nme.utils.Timer;
+
+
+#if !haxe3
+typedef Hash<T> = Map<String, T>;
+#end
+
 
 class Socket extends EventDispatcher
 {
 	public var connectionStatus(default, null) : SocketConnectionStatus;
 	public var host(default, null) : String;
 	public var port(default, null) : String;
-	public var transport(getTransport, null) : String;
+	public var transport(get_transport, null) : String;
 	public var secure(default, null) : Bool;
 	public var endpoint(default, null) : String;
 	
@@ -55,7 +70,7 @@ class Socket extends EventDispatcher
 		_uri = uri;
 		_buffer = new Array<String>();
 		_ack = 0;
-		_callbacks = new Hash < Dynamic->Void > ();
+		_callbacks = new Map <String, Dynamic->Void > ();
 								
 		if (options != null)
 		{
@@ -198,7 +213,7 @@ class Socket extends EventDispatcher
 		sendMessages();
 	}
 	
-	private function getTransport() : String
+	private function get_transport() : String
 	{
 		if (_currentTransports == null || _currentTransports.length == 0)
 			return "unknown";
@@ -372,7 +387,7 @@ class Socket extends EventDispatcher
 	private var _reconnectionAttemptsLeft : Int;
 	private var _proxy : SocketProxy;
 	private var _ack : Int;
-	private var _callbacks : Hash < Dynamic->Void > ;
+	private var _callbacks : Map <String,  Dynamic->Void > ;
 	private var _connectTimer : Timer;
 	private var _reconnectTimer : Timer;
 	private var _transports : Array<String>;

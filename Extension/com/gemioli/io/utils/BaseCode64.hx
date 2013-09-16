@@ -23,7 +23,7 @@
 package com.gemioli.io.utils;
 
 
-#if haxe_211
+#if (haxe_211 || haxe3)
 	import haxe.crypto.BaseCode;
 #else
 	import haxe.BaseCode;
@@ -31,7 +31,12 @@ package com.gemioli.io.utils;
 
 
 import haxe.io.Bytes;
-import nme.utils.ByteArray;
+#if openfl
+	import flash.utils.ByteArray;
+#else 
+	import nme.utils.ByteArray;
+#end
+
 
 // Thanks to Richard Janicek (http://haxe.org/forum/thread/3395#nabble-td6608415)
 class BaseCode64 {

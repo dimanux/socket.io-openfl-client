@@ -21,7 +21,12 @@
  */
 
 package com.gemioli.io.events;
-import nme.events.Event;
+#if openfl
+	import flash.events.Event;
+#else 
+	import nme.events.Event;	
+#end
+
 
 class SocketProxyEvent extends Event
 {
