@@ -34,7 +34,7 @@ extern class WebSocket
 	
 	static function __init__() : Void
 	{
-		haxe.macro.Tools.includeFile("com/gemioli/io/net/WebSocket.js");
+		haxe.macro.Compiler.includeFile("com/gemioli/io/net/WebSocket.js");
 	}
 	
 	public var url(default, null) : String;

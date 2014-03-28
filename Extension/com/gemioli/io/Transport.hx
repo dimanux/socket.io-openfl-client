@@ -82,7 +82,7 @@ class Transport extends EventDispatcher
 						{
 							var message = _data;
 							_data = "";
-							dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, message));
+							dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, false, false, message));
 							break;
 						}
 					}
@@ -106,7 +106,7 @@ class Transport extends EventDispatcher
 					var message = Utils.Utf8Substr(_data, 0, _dataLength);
 					_data = Utils.Utf8Substr(_data, _dataLength, Utf8.length(_data) - _dataLength);
 					_dataLength = -1;
-					dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, message));
+					dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, false, false, message));
 				}
 			}
 		}
