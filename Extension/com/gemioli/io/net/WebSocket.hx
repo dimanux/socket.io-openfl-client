@@ -638,7 +638,8 @@ class WebSocket extends EventDispatcher
 		for (i in 0...Std.int(shaKey.length / 2))
 			requestBytes.writeByte(Std.parseInt("0x" + shaKey.substr(i * 2, 2)));		
 		_expectedKey = BaseCode64.encodeByteArray(requestBytes);
-		var request = "GET " + _uri.path + " HTTP/1.1\r\n" +
+        var queryPart = if (_uri.query.length > 0) '?'+_uri.query else '';
+		var request = "GET " + _uri.path + queryPart + " HTTP/1.1\r\n" +
 		"Host: " + _uri.host + (_uri.port == "" ? "" : (":" + _uri.port)) + "\r\n" +
 		"Upgrade: websocket\r\n" +
 		"Connection: Upgrade\r\n" + 
