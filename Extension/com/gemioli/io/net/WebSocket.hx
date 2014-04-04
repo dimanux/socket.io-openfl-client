@@ -97,7 +97,7 @@ import haxe.io.Eof;
 import flash.net.Socket;
 #else // cpp
 import sys.net.Host;
-import cpp.vm.Thread;
+//import cpp.vm.Thread;
 import haxe.io.Error;
 
 private class Socket extends EventDispatcher
