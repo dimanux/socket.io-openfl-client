@@ -459,8 +459,9 @@ class WebSocket extends EventDispatcher
 					close(CloseEvent.CLOSE_ABNORMAL, "Bad connection header: " + headers.get("connection"));
 					return;
 				}
-				
-				if (headers.get("sec-websocket-accept") != _expectedKey)
+
+				var requestedKey = headers.get("sec-websocket-accept");
+				if (requestedKey != null && (requestedKey.substr(0, requestedKey.length-2) != _expectedKey.substr(0,requestedKey.length-2)))
 				{
 					close(CloseEvent.CLOSE_ABNORMAL, "Key [" + headers.get("sec-websocket-accept") + "] not equals to expected [" + _expectedKey + "].");
 					return;
