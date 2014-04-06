@@ -37,7 +37,7 @@ class WebSocketTransport extends Transport
 	{
 		super(host, port, secure, sessionId);
 		name = "websocket";
-        var queryPart = if (query.length > 0) '&'+query else '';
+        var queryPart = if (query != null && query.length > 0) '&'+query else '';
 		_url = (_secure ? "wss://" : "ws://") + _host + (_port == "" ? (_secure ? "443" : ":80") : (":" + _port)) + "/socket.io/1/websocket/" + _sessionId + "/?t=" + Transport.counter + queryPart;
 	}
 	
