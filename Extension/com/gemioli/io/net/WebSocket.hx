@@ -461,7 +461,14 @@ class WebSocket extends EventDispatcher
 				}
 
 				var requestedKey = headers.get("sec-websocket-accept");
-				if (requestedKey != null && (requestedKey.substr(0, requestedKey.length-2) != _expectedKey.substr(0,requestedKey.length-2)))
+                #if neko
+                if (requestedKey != null){
+                    requestedKey = requestedKey.substr(0, requestedKey.length-2);
+                    _expectedKey = _expectedKey.substr(0, requestedKey.length);
+                    }
+
+                #end
+				if (requestedKey != _expectedKey)
 				{
 					close(CloseEvent.CLOSE_ABNORMAL, "Key [" + headers.get("sec-websocket-accept") + "] not equals to expected [" + _expectedKey + "].");
 					return;
