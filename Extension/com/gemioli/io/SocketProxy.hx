@@ -60,7 +60,7 @@ class SocketProxy extends EventDispatcher
 	
 	public static function connectSocket(socket : Socket) : SocketProxy
 	{
-		var proxy = getProxy(socket.host, socket.port, socket.secure, socket.transport);
+		var proxy = getProxy(socket.host, socket.port, socket.secure, socket.transport, socket.query);
 		for (endpoint in proxy._endpoints)
 			if (endpoint == socket.endpoint)
 				return null;
@@ -71,7 +71,7 @@ class SocketProxy extends EventDispatcher
 	
 	public static function disconnectSocket(socket : Socket) : Void
 	{
-		var proxy = getProxy(socket.host, socket.port, socket.secure, socket.transport);
+		var proxy = getProxy(socket.host, socket.port, socket.secure, socket.transport, socket.query);
 		for (endpoint in proxy._endpoints)
 			if (endpoint == socket.endpoint)
 			{
@@ -93,15 +93,15 @@ class SocketProxy extends EventDispatcher
 		}
 	}
 	
-	private static function getProxy(host : String, port : String, secure : Bool, transport : String) : SocketProxy
+	private static function getProxy(host : String, port : String, secure : Bool, transport : String, query: String) : SocketProxy
 	{
 		var name = (secure ? "https" : "http") + "://" + host + (port == "" ? "" : (":" + port)) + "/" + transport;
 		if (!_proxies.exists(name))
-			_proxies.set(name, new SocketProxy(name, host, port, secure, transport));
+			_proxies.set(name, new SocketProxy(name, host, port, secure, transport, query));
 		return _proxies.get(name);
 	}
 	
-	private function new(name : String, host : String, port : String, secure : Bool, transport : String)
+	private function new(name : String, host : String, port : String, secure : Bool, transport : String, query: String)
 	{
 		super();
 		
@@ -109,6 +109,7 @@ class SocketProxy extends EventDispatcher
 		_host = host;
 		_port = port;
 		_secure = secure;
+        _query = query;
 		_transportName = transport;
 		_endpoints = new Array<String>();
 		connectionStatus = SocketConnectionStatus.DISCONNECTED;
@@ -213,9 +214,9 @@ class SocketProxy extends EventDispatcher
 		switch (_transportName)
 		{
 			case "websocket":
-				_transport = new WebSocketTransport(_host, _port, _secure, _sessionId);
+				_transport = new WebSocketTransport(_host, _port, _secure, _sessionId, _query);
 			case "xhr-polling":
-				_transport = new XHRPollingTransport(_host, _port, _secure, _sessionId);
+				_transport = new XHRPollingTransport(_host, _port, _secure, _sessionId, _query);
 			default:
 				{
 					disconnectEndpoints();
@@ -287,6 +288,7 @@ class SocketProxy extends EventDispatcher
 	private var _name : String;
 	private var _host : String;
 	private var _port : String;
+    private var _query : String;
 	private var _secure : Bool;
 	private var _endpoints : Array<String>;
 	private var _handshakeLoader : URLLoader;

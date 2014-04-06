@@ -56,6 +56,7 @@ class Socket extends EventDispatcher
 	public var transport(get_transport, null) : String;
 	public var secure(default, null) : Bool;
 	public var endpoint(default, null) : String;
+    public var query(default, null) : String;
 	
 	private var onceMap:Map<String, Dynamic->Void> = new Map();
 	
@@ -69,6 +70,7 @@ class Socket extends EventDispatcher
 		host = uriParsed.host;
 		port = uriParsed.port;
 		endpoint = uriParsed.path;
+        query = uriParsed.query;
 		_uri = uri;
 		_buffer = new Array<String>();
 		_ack = 0;

@@ -49,11 +49,12 @@ import com.gemioli.io.Transport;
 
 class XHRPollingTransport extends Transport
 {
-	public function new(host : String, port : String, secure : Bool, sessionId : String) 
+	public function new(host : String, port : String, secure : Bool, sessionId : String, query : String)
 	{
 		super(host, port, secure, sessionId);
 		name = "xhr-polling";
-		_url = (_secure ? "https://" : "http://") + _host + (_port == "" ? "" : (":" + _port)) + "/socket.io/1/xhr-polling/" + _sessionId + "/?t=";
+        var queryPart = if (query.length > 0) '&'+query else '';
+		_url = (_secure ? "https://" : "http://") + _host + (_port == "" ? "" : (":" + _port)) + "/socket.io/1/xhr-polling/" + _sessionId + "/?t=" + queryPart;
 		_messagesBuffer = new Array<String>();
 	}
 	
