@@ -22,11 +22,19 @@
 
 package com.gemioli;
 
+#if openfl
+import flash.display.Sprite;
+import flash.display.StageAlign;
+import flash.display.StageScaleMode;
+import flash.events.Event;
+import flash.Lib;
+#else
 import nme.display.Sprite;
 import nme.display.StageAlign;
 import nme.display.StageScaleMode;
 import nme.events.Event;
 import nme.Lib;
+#end
 
 import com.gemioli.io.Socket;
 import com.gemioli.io.events.SocketEvent;
@@ -154,8 +162,13 @@ class ExtensionTest extends Sprite
 	public static function main()
 	{
 		var stage = Lib.current.stage;
+		#if openfl
+		stage.scaleMode = flash.display.StageScaleMode.NO_SCALE;
+		stage.align = flash.display.StageAlign.TOP_LEFT;
+		#else
 		stage.scaleMode = nme.display.StageScaleMode.NO_SCALE;
 		stage.align = nme.display.StageAlign.TOP_LEFT;
+		#end
 		
 		Lib.current.addChild(new ExtensionTest ());
 	}
