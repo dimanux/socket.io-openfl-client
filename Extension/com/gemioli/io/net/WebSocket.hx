@@ -34,7 +34,7 @@ extern class WebSocket
 	
 	static function __init__() : Void
 	{
-		haxe.macro.Tools.includeFile("com/gemioli/io/net/WebSocket.js");
+		haxe.macro.Compiler.includeFile("com/gemioli/io/net/WebSocket.js");
 	}
 	
 	public var url(default, null) : String;
@@ -59,22 +59,45 @@ import com.gemioli.io.net.events.MessageEvent;
 import com.gemioli.io.utils.BaseCode64;
 import com.gemioli.io.utils.URLParser;
 import com.gemioli.io.net.events.ErrorEvent;
-import haxe.Int32;
+
+#if haxe3
+	import com.gemioli.io.utils.Int32;
+#end
+
 import haxe.io.Eof;
-import haxe.SHA1;
-import nme.events.Event;
-import nme.events.EventDispatcher;
-import nme.Lib;
-import nme.utils.ByteArray;
-import nme.events.ProgressEvent;
-import nme.events.IOErrorEvent;
-import nme.events.SecurityErrorEvent;
+
+#if (haxe_211 || haxe3)
+	import haxe.crypto.Sha1;
+#else
+	import haxe.SHA1;
+#end
+
+#if openfl
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.Lib;
+	import flash.utils.ByteArray;
+	import flash.events.ProgressEvent;
+	import flash.events.IOErrorEvent;
+	import flash.events.SecurityErrorEvent;
+#else 
+	import nme.events.Event;
+	import nme.events.EventDispatcher;
+	import nme.Lib;
+	import nme.utils.ByteArray;
+	import nme.events.ProgressEvent;
+	import nme.events.IOErrorEvent;
+	import nme.events.SecurityErrorEvent;
+#end
+
+
+
 
 #if flash
 import flash.net.Socket;
 #else // cpp
 import sys.net.Host;
-import cpp.vm.Thread;
+//import cpp.vm.Thread;
 import haxe.io.Error;
 
 private class Socket extends EventDispatcher
@@ -411,7 +434,7 @@ class WebSocket extends EventDispatcher
 				else
 					headersArray.shift();
 				
-				var headers = new Hash<String>();
+				var headers = new Map<String, String>();
 				for (headerString in headersArray)
 				{
 					var delim = headerString.indexOf(":");
@@ -436,8 +459,16 @@ class WebSocket extends EventDispatcher
 					close(CloseEvent.CLOSE_ABNORMAL, "Bad connection header: " + headers.get("connection"));
 					return;
 				}
-				
-				if (headers.get("sec-websocket-accept") != _expectedKey)
+
+				var requestedKey = headers.get("sec-websocket-accept");
+                #if neko
+                if (requestedKey != null){
+                    requestedKey = requestedKey.substr(0, requestedKey.length-2);
+                    _expectedKey = _expectedKey.substr(0, requestedKey.length);
+                    }
+
+                #end
+				if (requestedKey != _expectedKey)
 				{
 					close(CloseEvent.CLOSE_ABNORMAL, "Key [" + headers.get("sec-websocket-accept") + "] not equals to expected [" + _expectedKey + "].");
 					return;
@@ -605,12 +636,17 @@ class WebSocket extends EventDispatcher
 		for (i in 0...requestBytes.length)
 			requestBytes[i] = Std.random(256);
 		var requestKey = BaseCode64.encodeByteArray(requestBytes);
-		var shaKey = SHA1.encode(requestKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+		#if !haxe3
+			var shaKey = SHA1.encode(requestKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+		#else
+			var shaKey = Sha1.encode(requestKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+		#end
 		requestBytes.clear();
 		for (i in 0...Std.int(shaKey.length / 2))
 			requestBytes.writeByte(Std.parseInt("0x" + shaKey.substr(i * 2, 2)));		
 		_expectedKey = BaseCode64.encodeByteArray(requestBytes);
-		var request = "GET " + _uri.path + " HTTP/1.1\r\n" +
+        var queryPart = if (_uri.query.length > 0) '?'+_uri.query else '';
+		var request = "GET " + _uri.path + queryPart + " HTTP/1.1\r\n" +
 		"Host: " + _uri.host + (_uri.port == "" ? "" : (":" + _uri.port)) + "\r\n" +
 		"Upgrade: websocket\r\n" +
 		"Connection: Upgrade\r\n" + 

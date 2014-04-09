@@ -22,7 +22,11 @@
 
 package com.gemioli.io.net.events;
 
-import nme.events.Event;
+#if openfl
+	import flash.events.Event;
+#else 
+	import nme.events.Event;	
+#end
 
 class MessageEvent extends Event
 {

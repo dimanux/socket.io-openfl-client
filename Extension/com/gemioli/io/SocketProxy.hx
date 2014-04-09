@@ -30,14 +30,29 @@ import com.gemioli.io.transports.WebSocketTransport;
 import com.gemioli.io.transports.XHRPollingTransport;
 import com.gemioli.io.utils.Utils;
 import haxe.Utf8;
-import nme.events.EventDispatcher;
-import nme.events.SecurityErrorEvent;
-import nme.net.URLLoader;
-import nme.net.URLRequest;
-import nme.net.URLRequestMethod;
-import nme.events.Event;
-import nme.events.IOErrorEvent;
-import nme.events.HTTPStatusEvent;
+
+#if openfl
+	import flash.events.EventDispatcher;
+	import flash.events.SecurityErrorEvent;
+	import flash.net.URLLoader;
+	import flash.net.URLRequest;
+	import flash.net.URLRequestMethod;
+	import flash.events.Event;
+	import flash.events.IOErrorEvent;
+	import flash.events.HTTPStatusEvent;
+#else 
+	import nme.events.EventDispatcher;
+	import nme.events.SecurityErrorEvent;
+	import nme.net.URLLoader;
+	import nme.net.URLRequest;
+	import nme.net.URLRequestMethod;
+	import nme.events.Event;
+	import nme.events.IOErrorEvent;
+	import nme.events.HTTPStatusEvent;	
+#end
+
+
+
 
 class SocketProxy extends EventDispatcher
 {
@@ -45,7 +60,7 @@ class SocketProxy extends EventDispatcher
 	
 	public static function connectSocket(socket : Socket) : SocketProxy
 	{
-		var proxy = getProxy(socket.host, socket.port, socket.secure, socket.transport);
+		var proxy = getProxy(socket.host, socket.port, socket.secure, socket.transport, socket.query);
 		for (endpoint in proxy._endpoints)
 			if (endpoint == socket.endpoint)
 				return null;
@@ -56,7 +71,7 @@ class SocketProxy extends EventDispatcher
 	
 	public static function disconnectSocket(socket : Socket) : Void
 	{
-		var proxy = getProxy(socket.host, socket.port, socket.secure, socket.transport);
+		var proxy = getProxy(socket.host, socket.port, socket.secure, socket.transport, socket.query);
 		for (endpoint in proxy._endpoints)
 			if (endpoint == socket.endpoint)
 			{
@@ -78,15 +93,15 @@ class SocketProxy extends EventDispatcher
 		}
 	}
 	
-	private static function getProxy(host : String, port : String, secure : Bool, transport : String) : SocketProxy
+	private static function getProxy(host : String, port : String, secure : Bool, transport : String, query: String) : SocketProxy
 	{
 		var name = (secure ? "https" : "http") + "://" + host + (port == "" ? "" : (":" + port)) + "/" + transport;
 		if (!_proxies.exists(name))
-			_proxies.set(name, new SocketProxy(name, host, port, secure, transport));
+			_proxies.set(name, new SocketProxy(name, host, port, secure, transport, query));
 		return _proxies.get(name);
 	}
 	
-	private function new(name : String, host : String, port : String, secure : Bool, transport : String)
+	private function new(name : String, host : String, port : String, secure : Bool, transport : String, query: String)
 	{
 		super();
 		
@@ -94,6 +109,7 @@ class SocketProxy extends EventDispatcher
 		_host = host;
 		_port = port;
 		_secure = secure;
+        _query = query;
 		_transportName = transport;
 		_endpoints = new Array<String>();
 		connectionStatus = SocketConnectionStatus.DISCONNECTED;
@@ -198,9 +214,9 @@ class SocketProxy extends EventDispatcher
 		switch (_transportName)
 		{
 			case "websocket":
-				_transport = new WebSocketTransport(_host, _port, _secure, _sessionId);
+				_transport = new WebSocketTransport(_host, _port, _secure, _sessionId, _query);
 			case "xhr-polling":
-				_transport = new XHRPollingTransport(_host, _port, _secure, _sessionId);
+				_transport = new XHRPollingTransport(_host, _port, _secure, _sessionId, _query);
 			default:
 				{
 					disconnectEndpoints();
@@ -259,6 +275,12 @@ class SocketProxy extends EventDispatcher
 			var endpoints = _endpoints.copy();
 			for (endpoint in endpoints)
 				dispatchEvent(new SocketProxyEvent(endpoint, 0, "", ""));
+		} 
+		else if (messageId == 2 && messageParts[2] == "") //heartbeat without endpoint
+		{
+			var endpoints = _endpoints.copy();
+			for (endpoint in endpoints)
+				dispatchEvent(new SocketProxyEvent(endpoint, Std.parseInt(messageParts[0]), messageParts[1], messageParts.length > 3 ? messageParts[3] : ""));
 		}
 		dispatchEvent(new SocketProxyEvent(messageParts[2], Std.parseInt(messageParts[0]), messageParts[1], messageParts.length > 3 ? messageParts[3] : ""));
 	}
@@ -266,6 +288,7 @@ class SocketProxy extends EventDispatcher
 	private var _name : String;
 	private var _host : String;
 	private var _port : String;
+    private var _query : String;
 	private var _secure : Bool;
 	private var _endpoints : Array<String>;
 	private var _handshakeLoader : URLLoader;
@@ -277,5 +300,5 @@ class SocketProxy extends EventDispatcher
 	private var _closeTimeout : Int;
 	
 	// Static proxies
-	private static var _proxies : Hash<SocketProxy> = new Hash<SocketProxy>();
+	private static var _proxies : Map<String, SocketProxy> = new Map<String, SocketProxy>();
 }

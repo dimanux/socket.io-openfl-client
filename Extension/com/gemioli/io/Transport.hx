@@ -23,13 +23,19 @@
 package com.gemioli.io;
 
 import com.gemioli.io.events.TransportEvent;
-import nme.events.EventDispatcher;
 import haxe.Utf8;
 import com.gemioli.io.utils.Utils;
 
+#if openfl
+	import flash.events.EventDispatcher;
+#else 
+	import nme.events.EventDispatcher;	
+#end
+
+
 class Transport extends EventDispatcher
 {
-	public static var counter(getCounter, null) : Int = 0;
+	public static var counter(get_counter, null) : Int = 0;
 	public var name(default, null) : String;
 	
 	public function new(host : String, port : String, secure : Bool, sessionId : String) 
@@ -76,7 +82,7 @@ class Transport extends EventDispatcher
 						{
 							var message = _data;
 							_data = "";
-							dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, message));
+							dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, false, false, message));
 							break;
 						}
 					}
@@ -100,7 +106,7 @@ class Transport extends EventDispatcher
 					var message = Utils.Utf8Substr(_data, 0, _dataLength);
 					_data = Utils.Utf8Substr(_data, _dataLength, Utf8.length(_data) - _dataLength);
 					_dataLength = -1;
-					dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, message));
+					dispatchEvent(new TransportEvent(TransportEvent.MESSAGE, false, false, message));
 				}
 			}
 		}
@@ -116,7 +122,7 @@ class Transport extends EventDispatcher
 		return encodedString;
 	}
 	
-	private static function getCounter() : Int
+	private static function get_counter() : Int
 	{
 		return counter++;
 	}

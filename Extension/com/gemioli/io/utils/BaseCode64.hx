@@ -22,9 +22,21 @@
 
 package com.gemioli.io.utils;
 
-import haxe.BaseCode;
+
+#if (haxe_211 || haxe3)
+	import haxe.crypto.BaseCode;
+#else
+	import haxe.BaseCode;
+#end
+
+
 import haxe.io.Bytes;
-import nme.utils.ByteArray;
+#if openfl
+	import flash.utils.ByteArray;
+#else 
+	import nme.utils.ByteArray;
+#end
+
 
 // Thanks to Richard Janicek (http://haxe.org/forum/thread/3395#nabble-td6608415)
 class BaseCode64 {

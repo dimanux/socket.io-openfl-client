@@ -48,7 +48,9 @@ class URLParser
 	public var secure : Bool;
  
     // Privates
-    inline static private var _parts : Array<String> = ["source","protocol","authority","userInfo","user","password","host","port","relative","path","directory","file","query","anchor"];
+    inline static private function _parts() : Array<String> {
+        return ["source","protocol","authority","userInfo","user","password","host","port","relative","path","directory","file","query","anchor"];
+    }
  
     public function new(url:String)
     {
@@ -62,9 +64,9 @@ class URLParser
         r.match(url);
  
         // Use reflection to set each part
-        for (i in 0..._parts.length)
+        for (i in 0..._parts().length)
         {
-            Reflect.setField(this, _parts[i],  r.matched(i));
+            Reflect.setField(this, _parts()[i],  r.matched(i));
         }
 		
 		if (protocol == "https" || protocol == "wss")
@@ -81,9 +83,9 @@ class URLParser
     public function toString() : String
     {
         var s : String = "For Url -> " + url + "\n";
-        for (i in 0..._parts.length)
+        for (i in 0..._parts().length)
         {
-            s += _parts[i] + ": " + Reflect.field(this, _parts[i]) + (i==_parts.length-1?"":"\n");
+            s += _parts()[i] + ": " + Reflect.field(this, _parts()[i]) + (i==_parts().length-1?"":"\n");
         }
 		s += "\nsecure: " + secure;
         return s;

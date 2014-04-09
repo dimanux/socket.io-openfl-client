@@ -33,11 +33,12 @@ import com.gemioli.io.events.TransportEvent;
 
 class WebSocketTransport extends Transport
 {
-	public function new(host : String, port : String, secure : Bool, sessionId : String) 
+	public function new(host : String, port : String, secure : Bool, sessionId : String, query : String)
 	{
 		super(host, port, secure, sessionId);
 		name = "websocket";
-		_url = (_secure ? "wss://" : "ws://") + _host + (_port == "" ? (_secure ? "443" : ":80") : (":" + _port)) + "/socket.io/1/websocket/" + _sessionId + "/?t=" + Transport.counter;
+        var queryPart = if (query != null && query.length > 0) '&'+query else '';
+		_url = (_secure ? "wss://" : "ws://") + _host + (_port == "" ? (_secure ? "443" : ":80") : (":" + _port)) + "/socket.io/1/websocket/" + _sessionId + "/?t=" + Transport.counter + queryPart;
 	}
 	
 	override public function send(message : String) : Void
