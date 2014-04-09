@@ -1,7 +1,7 @@
-socket.io-nme-client
+socket.io-openfl-client
 ====================
 
-Socket.io NME client extension.
+Socket.io OpenFL client extension.
 
 ###What's done:
 * Interface of socket.io client (v.9) (http://socket.io/#how-to-use)
@@ -14,12 +14,12 @@ Socket.io NME client extension.
 * Secure connections
 * Optimizations
 
-###Tested with HaXe 2.10, NME 3.5.5, HXCPP 2.10.3, nodejs 0.8.18 (or dotcloud) on platforms:
+###Tested with HaXe 3.x, OpenFL 1.3.0, nodejs 0.10.26 (or dotcloud) on platforms:
 * Flash 11
 * HTML5
 * Windows
 * Android
-* iOS (not tested)
+* iOS
 * Blackberry (not tested)
 
 ###Folders:
@@ -28,13 +28,13 @@ Socket.io NME client extension.
 * Server - simple nodeJS server code (run npm-install.bat, then run.bat)
 
 ###Example:
-See [example](https://github.com/dimanux/socket.io-nme-client/blob/master/Project/Source/com/gemioli/ExtensionTest.hx)
+See [example](https://github.com/dimanux/socket.io-openfl-client/blob/master/Project/Source/com/gemioli/ExtensionTest.hx)
 
 ###License:
 
 (The MIT License)
 
-Copyright (c) 2013, Dmitriy Kapustin (dimanux), gemioli.com
+Copyright (c) Dmitriy Kapustin (dimanux), gemioli.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
